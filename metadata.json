@@ -1,0 +1,6 @@
+{
+  "name": "Test Bank LMS",
+  "description": "A question bank and exam platform structurally modeled on JoomLMS, featuring hierarchical categories, reusable questions, random-pull assembly, and automatic grading of student attempts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
