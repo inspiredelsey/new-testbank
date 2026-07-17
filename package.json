@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "php -S 0.0.0.0:3000",
+    "dev": "which php || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" php-cli php-sqlite3) && php -S 0.0.0.0:3000",
     "build": "echo 'No build step required for PHP'",
-    "start": "php -S 0.0.0.0:3000",
+    "start": "which php || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" php-cli php-sqlite3) && php -S 0.0.0.0:3000",
     "clean": "rm -rf dist",
     "lint": "echo 'Skipping TS lint for PHP stack'"
   },

@@ -66,8 +66,8 @@ class Database {
         $sqlContent = preg_replace('/CREATE DATABASE IF NOT EXISTS \w+;/', '', $sqlContent);
         $sqlContent = preg_replace('/USE \w+;/', '', $sqlContent);
         $sqlContent = preg_replace('/SET FOREIGN_KEY_CHECKS = \d;/', '', $sqlContent);
-        $sqlContent = preg_replace('/ENGINE=InnoDB DEFAULT CHARSET=\w+ COLLATE=\w+;/', '', $sqlContent);
-        $sqlContent = preg_replace('/ENGINE=InnoDB DEFAULT CHARSET=\w+;/', '', $sqlContent);
+        $sqlContent = preg_replace('/ENGINE=InnoDB DEFAULT CHARSET=\w+ COLLATE=\w+;/', ';', $sqlContent);
+        $sqlContent = preg_replace('/ENGINE=InnoDB DEFAULT CHARSET=\w+;/', ';', $sqlContent);
         $sqlContent = preg_replace('/ENGINE=InnoDB/', '', $sqlContent);
         $sqlContent = preg_replace('/DEFAULT CHARSET=\w+/', '', $sqlContent);
         $sqlContent = preg_replace('/COLLATE \w+/', '', $sqlContent);
@@ -77,6 +77,9 @@ class Database {
         
         // SQLite doesn't support ENUM, map it to TEXT
         $sqlContent = preg_replace('/ENUM\([^)]+\)/i', 'TEXT', $sqlContent);
+        
+        // SQLite doesn't support ON UPDATE CURRENT_TIMESTAMP, strip it
+        $sqlContent = preg_replace('/ON UPDATE CURRENT_TIMESTAMP/i', '', $sqlContent);
         
         // Remove trailing INDEX definitions from CREATE TABLE statements or map them
         // Let's strip index lines from inside CREATE TABLE
