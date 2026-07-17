@@ -55,8 +55,8 @@ switch ($action) {
  * Action: List Users
  */
 function handleList() {
-    $roleFilter = $_GET['role'] ?? null;
-    $statusFilter = $_GET['status'] ?? null;
+    $roleFilter = !empty($_GET['role']) ? $_GET['role'] : null;
+    $statusFilter = !empty($_GET['status']) ? $_GET['status'] : null;
 
     // Validate query parameter values to prevent issues
     if ($roleFilter && !in_array($roleFilter, ['admin', 'instructor', 'student'])) {

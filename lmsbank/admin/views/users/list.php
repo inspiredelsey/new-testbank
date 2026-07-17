@@ -3,8 +3,8 @@
  * Users List View - LMS Bank Admin
  */
 
-require_once __DIR__ . '/../../../../includes/Session.php';
-require_once __DIR__ . '/../../../../includes/Csrf.php';
+require_once __DIR__ . '/../../../includes/Session.php';
+require_once __DIR__ . '/../../../includes/Csrf.php';
 
 Session::start();
 

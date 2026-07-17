@@ -4,462 +4,532 @@
  */
 
 require_once __DIR__ . '/../models/Course.php';
-require_once __DIR__ . '/../models/Document.php';
-require_once __DIR__ . '/../models/Link.php';
-require_once __DIR__ . '/../models/LearningPath.php';
-require_once __DIR__ . '/../models/Exam.php';
+require_once __DIR__ . '/../models/Category.php';
 require_once __DIR__ . '/../../includes/Auth.php';
 require_once __DIR__ . '/../../includes/Session.php';
 
 class CourseController {
     private $courseModel;
-    private $docModel;
-    private $linkModel;
-    private $lpModel;
-    private $examModel;
+    private $categoryModel;
 
     public function __construct() {
         Auth::requireRole(['admin', 'instructor']);
         $this->courseModel = new Course();
-        $this->docModel = new Document();
-        $this->linkModel = new Link();
-        $this->lpModel = new LearningPath();
-        $this->examModel = new Exam();
+        $this->categoryModel = new Category();
     }
 
+    /**
+     * Dispatch routing requests based on action parameter.
+     */
     public function handleRequest($action = 'index') {
-        $csrfToken = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? '';
-
         switch ($action) {
             case 'index':
-                $filters = [];
-                if (!Auth::hasRole(['admin'])) {
-                    $filters['instructor_id'] = Session::get('user_id');
-                }
-                $courses = $this->courseModel->getAll($filters);
-                include __DIR__ . '/../views/courses/index.php';
+            case 'list':
+                $this->handleList();
                 break;
 
             case 'create':
                 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $data = [
-                        'title' => trim($_POST['title']),
-                        'description' => trim($_POST['description'] ?? ''),
-                        'instructor_id' => Auth::hasRole(['admin']) ? intval($_POST['instructor_id']) : Session::get('user_id'),
-                        'status' => $_POST['status'] ?? 'draft'
-                    ];
-
-                    if (empty($data['title'])) {
-                        $error = "Course title is required.";
-                        include __DIR__ . '/../views/courses/create.php';
-                        exit;
-                    }
-
-                    $courseId = $this->courseModel->create($data);
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&success=Course created successfully");
-                    exit;
+                    $this->handleCreatePost();
+                } else {
+                    $this->handleCreateGet();
                 }
-
-                // Get all instructors for admin selector
-                $db = Database::getInstance()->getConnection();
-                $stmt = $db->query("SELECT id, name FROM users WHERE role IN ('admin', 'instructor') AND status = 'active' ORDER BY name ASC");
-                $instructors = $stmt->fetchAll();
-
-                include __DIR__ . '/../views/courses/create.php';
                 break;
 
             case 'edit':
-                $id = intval($_GET['id'] ?? 0);
-                $course = $this->courseModel->getById($id);
-                if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                    header("Location: index.php?route=admin/courses&error=Course not found or unauthorized");
-                    exit;
-                }
-
                 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $data = [
-                        'title' => trim($_POST['title']),
-                        'description' => trim($_POST['description'] ?? ''),
-                        'instructor_id' => Auth::hasRole(['admin']) ? intval($_POST['instructor_id']) : Session::get('user_id'),
-                        'status' => $_POST['status'] ?? 'draft'
-                    ];
-
-                    if (empty($data['title'])) {
-                        $error = "Course title is required.";
-                        $db = Database::getInstance()->getConnection();
-                        $stmt = $db->query("SELECT id, name FROM users WHERE role IN ('admin', 'instructor') AND status = 'active' ORDER BY name ASC");
-                        $instructors = $stmt->fetchAll();
-                        include __DIR__ . '/../views/courses/edit.php';
-                        exit;
-                    }
-
-                    $this->courseModel->update($id, $data);
-                    header("Location: index.php?route=admin/courses&action=view&id=$id&success=Course details updated");
-                    exit;
+                    $this->handleEditPost();
+                } else {
+                    $this->handleEditGet();
                 }
+                break;
 
-                // Get instructors for selector
-                $db = Database::getInstance()->getConnection();
-                $stmt = $db->query("SELECT id, name FROM users WHERE role IN ('admin', 'instructor') AND status = 'active' ORDER BY name ASC");
-                $instructors = $stmt->fetchAll();
-
-                include __DIR__ . '/../views/courses/edit.php';
+            case 'status':
+                $this->handleStatusChange();
                 break;
 
             case 'delete':
-                $id = intval($_GET['id'] ?? 0);
-                $course = $this->courseModel->getById($id);
-                if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                    header("Location: index.php?route=admin/courses&error=Course not found or unauthorized");
-                    exit;
-                }
-
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $this->courseModel->delete($id);
-                    header("Location: index.php?route=admin/courses&success=Course deleted successfully");
-                    exit;
-                }
+                $this->handleDelete();
                 break;
 
-            case 'view':
-                $id = intval($_GET['id'] ?? 0);
-                $course = $this->courseModel->getById($id);
-                if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                    header("Location: index.php?route=admin/courses&error=Course not found or unauthorized");
-                    exit;
-                }
+            default:
+                header("Location: index.php?route=admin/courses&action=list");
+                exit;
+        }
+    }
 
-                $documents = $this->docModel->getByCourse($id);
-                $links = $this->linkModel->getByCourse($id);
-                $lpItems = $this->lpModel->getItemsByCourse($id);
-                
-                // Get course enrolled and non-enrolled students
-                $enrolledStudents = $this->courseModel->getEnrolledStudents($id);
-                $nonEnrolledStudents = $this->courseModel->getNonEnrolledStudents($id);
+    /**
+     * Action: List all courses with role-based scoping and filters
+     */
+    private function handleList() {
+        $user = Auth::user();
+        
+        $selectedCategoryId = !empty($_GET['category_id']) ? (int)$_GET['category_id'] : null;
+        $selectedStatus = !empty($_GET['status']) ? trim($_GET['status']) : '';
 
-                // Get course specific exams
-                $stmt = Database::getInstance()->getConnection()->prepare("SELECT * FROM exams WHERE course_id = ? OR course_id IS NULL");
-                $stmt->execute([$id]);
-                $courseExams = $stmt->fetchAll();
+        // Build filters for getall/listing
+        $filters = [];
+        if ($user['role'] !== 'admin') {
+            $filters['instructor_id'] = $user['id'];
+        }
+        if ($selectedCategoryId !== null) {
+            $filters['category_id'] = $selectedCategoryId;
+        }
+        if (!empty($selectedStatus)) {
+            $filters['status'] = $selectedStatus;
+        }
 
-                // Get general published exams that can be added to LP or course
-                $allExams = $this->examModel->getAll();
+        $courses = $this->courseModel->getAll($filters);
+        
+        // Fetch categories for filter dropdown
+        $categories = $this->categoryModel->getTreeFlat();
+        $csrfToken = Session::getCSRFToken();
 
-                include __DIR__ . '/../views/courses/view.php';
-                break;
+        include __DIR__ . '/../views/courses/list.php';
+    }
 
-            // Course content actions
-            case 'add_document':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $title = trim($_POST['title']);
-                    
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
+    /**
+     * Action: Show Create Form
+     */
+    private function handleCreateGet() {
+        $title = "Create Course";
+        $submitUrl = "index.php?route=admin/courses&action=create";
+        $isEdit = false;
 
-                    // Handle PDF upload
-                    $fileName = '';
-                    $filePath = '';
-                    
-                    if (isset($_FILES['doc_file']) && $_FILES['doc_file']['error'] === UPLOAD_ERR_OK) {
+        $errors = Session::get('validation_errors') ?? [];
+        $formData = Session::get('form_data') ?? [];
+
+        Session::delete('validation_errors');
+        Session::delete('form_data');
+
+        // Fetch instructors for dropdown (admins can select anyone, instructors are locked)
+        $instructors = $this->getInstructorsList();
+        $flatCategories = $this->categoryModel->getTreeFlat();
+
+        include __DIR__ . '/../views/courses/form.php';
+    }
+
+    /**
+     * Action: Handle Course Creation (POST)
+     */
+    private function handleCreatePost() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            Session::set('form_data', $_POST);
+            header("Location: index.php?route=admin/courses&action=create&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $user = Auth::user();
+        
+        // Prepare inputs
+        $titleVal = trim($_POST['title'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $categoryId = !empty($_POST['category_id']) ? (int)$_POST['category_id'] : null;
+        
+        // If current user is instructor, auto-lock instructor_id to themselves
+        $instructorId = ($user['role'] === 'instructor') ? $user['id'] : (!empty($_POST['instructor_id']) ? (int)$_POST['instructor_id'] : null);
+        
+        $status = $_POST['status'] ?? 'draft';
+        $passPercentage = isset($_POST['pass_percentage']) ? trim($_POST['pass_percentage']) : '';
+
+        $errors = [];
+
+        // Validate title
+        if (empty($titleVal)) {
+            $errors['title'] = "Course title is required.";
+        } elseif (strlen($titleVal) > 200) {
+            $errors['title'] = "Course title must not exceed 200 characters.";
+        }
+
+        // Validate category_id
+        if (empty($categoryId)) {
+            $errors['category_id'] = "Category is required.";
+        } else {
+            $categoryObj = $this->categoryModel->find($categoryId);
+            if (!$categoryObj) {
+                $errors['category_id'] = "Selected category does not exist.";
+            }
+        }
+
+        // Validate instructor_id
+        if (empty($instructorId)) {
+            $errors['instructor_id'] = "Instructor is required.";
+        } else {
+            $instructorObj = $this->getUserById($instructorId);
+            if (!$instructorObj || !in_array($instructorObj['role'], ['instructor', 'admin'])) {
+                $errors['instructor_id'] = "Selected user must be an instructor or an admin.";
+            }
+        }
+
+        // Validate pass_percentage
+        if ($passPercentage === '') {
+            $errors['pass_percentage'] = "Pass percentage is required.";
+        } elseif (!is_numeric($passPercentage)) {
+            $errors['pass_percentage'] = "Pass percentage must be a numeric value.";
+        } else {
+            $passFloat = floatval($passPercentage);
+            if ($passFloat < 0 || $passFloat > 100) {
+                $errors['pass_percentage'] = "Pass percentage must be between 0 and 100.";
+            }
+        }
+
+        // Validate status
+        if (!in_array($status, ['draft', 'published', 'archived'])) {
+            $errors['status'] = "Invalid status selected.";
+        }
+
+        // Validate and upload thumbnail
+        $thumbnailPath = null;
+        if (isset($_FILES['thumbnail']) && $_FILES['thumbnail']['error'] === UPLOAD_ERR_OK) {
+            $fileTmpPath = $_FILES['thumbnail']['tmp_name'];
+            $fileSize = $_FILES['thumbnail']['size'];
+            $fileName = $_FILES['thumbnail']['name'];
+
+            if ($fileSize > 2 * 1024 * 1024) {
+                $errors['thumbnail'] = "The thumbnail image must not exceed 2MB.";
+            } else {
+                $imageInfo = @getimagesize($fileTmpPath);
+                if ($imageInfo === false) {
+                    $errors['thumbnail'] = "Uploaded file is not a valid image.";
+                } else {
+                    $mimeType = $imageInfo['mime'];
+                    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                    if (!in_array($mimeType, $allowedMimes)) {
+                        $errors['thumbnail'] = "Only JPG, PNG, GIF, and WEBP images are allowed.";
+                    } else {
                         $uploadDir = __DIR__ . '/../../uploads/';
                         if (!is_dir($uploadDir)) {
                             mkdir($uploadDir, 0777, true);
                         }
-                        
-                        $fileTmpPath = $_FILES['doc_file']['tmp_name'];
-                        $fileName = basename($_FILES['doc_file']['name']);
-                        $fileNameClean = preg_replace("/[^A-Za-z0-9._-]/", "_", $fileName);
-                        $filePath = 'uploads/' . time() . '_' . $fileNameClean;
-                        
-                        move_uploaded_file($fileTmpPath, __DIR__ . '/../../' . $filePath);
-                    } else {
-                        // Fallback/Placeholder if no upload or simulated upload (e.g. text/URL link instead)
-                        $fileName = 'Manual_' . trim($_POST['file_name_text'] ?? 'Document.pdf');
-                        $filePath = 'uploads/' . time() . '_' . preg_replace("/[^A-Za-z0-9._-]/", "_", $fileName);
-                        file_put_contents(__DIR__ . '/../../' . $filePath, "Placeholder Document content");
-                    }
-
-                    $this->docModel->create([
-                        'course_id' => $courseId,
-                        'title' => $title ?: $fileName,
-                        'file_name' => $fileName,
-                        'file_path' => $filePath,
-                        'status' => 'published'
-                    ]);
-
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=documents&success=Document uploaded successfully");
-                    exit;
-                }
-                break;
-
-            case 'delete_document':
-                $id = intval($_GET['id'] ?? 0);
-                $doc = $this->docModel->getById($id);
-                if ($doc) {
-                    $course = $this->courseModel->getById($doc['course_id']);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-                    
-                    // Delete physical file if exists
-                    $fullPath = __DIR__ . '/../../' . $doc['file_path'];
-                    if (file_exists($fullPath) && is_file($fullPath)) {
-                        unlink($fullPath);
-                    }
-
-                    $this->docModel->delete($id);
-                    header("Location: index.php?route=admin/courses&action=view&id={$doc['course_id']}&tab=documents&success=Document deleted");
-                    exit;
-                }
-                break;
-
-            case 'add_link':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $title = trim($_POST['title']);
-                    $url = trim($_POST['url']);
-
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $this->linkModel->create([
-                        'course_id' => $courseId,
-                        'title' => $title,
-                        'url' => $url,
-                        'status' => 'published'
-                    ]);
-
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=links&success=Link added successfully");
-                    exit;
-                }
-                break;
-
-            case 'delete_link':
-                $id = intval($_GET['id'] ?? 0);
-                $link = $this->linkModel->getById($id);
-                if ($link) {
-                    $course = $this->courseModel->getById($link['course_id']);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $this->linkModel->delete($id);
-                    header("Location: index.php?route=admin/courses&action=view&id={$link['course_id']}&tab=links&success=Link deleted");
-                    exit;
-                }
-                break;
-
-            // Learning Path item actions
-            case 'add_lp_item':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $type = $_POST['type'];
-                    $itemId = intval($_POST['item_id']);
-                    $prereqId = !empty($_POST['prerequisite_id']) ? intval($_POST['prerequisite_id']) : null;
-                    
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    // Get max order index
-                    $db = Database::getInstance()->getConnection();
-                    $stmt = $db->prepare("SELECT MAX(order_index) as max_order FROM learning_path_items WHERE course_id = ?");
-                    $stmt->execute([$courseId]);
-                    $maxOrder = intval($stmt->fetch()['max_order'] ?? 0);
-
-                    $this->lpModel->addItem([
-                        'course_id' => $courseId,
-                        'type' => $type,
-                        'item_id' => $itemId,
-                        'prerequisite_id' => $prereqId,
-                        'order_index' => $maxOrder + 1
-                    ]);
-
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=learning-path&success=Content added to Learning Path");
-                    exit;
-                }
-                break;
-
-            case 'update_lp_orders':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        echo json_encode(['status' => 'error', 'message' => 'CSRF failed']);
-                        exit;
-                    }
-                    
-                    $orders = $_POST['orders'] ?? []; // Array of lp_item_id => order_index
-                    foreach ($orders as $itemId => $order) {
-                        $lpItem = $this->lpModel->getItemById(intval($itemId));
-                        if ($lpItem) {
-                            $this->lpModel->updateItem($lpItem['id'], [
-                                'prerequisite_id' => $lpItem['prerequisite_id'],
-                                'order_index' => intval($order)
-                            ]);
+                        $cleanName = preg_replace("/[^A-Za-z0-9._-]/", "_", basename($fileName));
+                        $uniqueName = time() . '_' . $cleanName;
+                        if (move_uploaded_file($fileTmpPath, $uploadDir . $uniqueName)) {
+                            $thumbnailPath = 'uploads/' . $uniqueName;
+                        } else {
+                            $errors['thumbnail'] = "Failed to save uploaded image.";
                         }
                     }
-                    echo json_encode(['status' => 'success']);
-                    exit;
                 }
-                break;
+            }
+        }
 
-            case 'update_lp_prereq':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $lpItemId = intval($_POST['lp_item_id']);
-                    $prereqId = !empty($_POST['prerequisite_id']) ? intval($_POST['prerequisite_id']) : null;
+        if (!empty($errors)) {
+            Session::set('validation_errors', $errors);
+            Session::set('form_data', $_POST);
+            header("Location: index.php?route=admin/courses&action=create");
+            exit;
+        }
 
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $lpItem = $this->lpModel->getItemById($lpItemId);
-                    if ($lpItem) {
-                        $this->lpModel->updateItem($lpItemId, [
-                            'prerequisite_id' => $prereqId,
-                            'order_index' => $lpItem['order_index']
-                        ]);
-                    }
-
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=learning-path&success=Prerequisite updated");
-                    exit;
-                }
-                break;
-
-            case 'delete_lp_item':
-                $id = intval($_GET['id'] ?? 0);
-                $lpItem = $this->lpModel->getItemById($id);
-                if ($lpItem) {
-                    $course = $this->courseModel->getById($lpItem['course_id']);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $this->lpModel->deleteItem($id);
-                    header("Location: index.php?route=admin/courses&action=view&id={$lpItem['course_id']}&tab=learning-path&success=Item removed from Learning Path");
-                    exit;
-                }
-                break;
-
-            // Student enrollment actions
-            case 'enroll_student':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $studentId = intval($_POST['student_id']);
-
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $this->courseModel->enrollStudent($courseId, $studentId);
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=enrollments&success=Student enrolled successfully");
-                    exit;
-                }
-                break;
-
-            case 'unenroll_student':
-                $courseId = intval($_GET['course_id'] ?? 0);
-                $studentId = intval($_GET['student_id'] ?? 0);
-
-                $course = $this->courseModel->getById($courseId);
-                if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                    header("Location: index.php?route=admin/courses&error=Unauthorized");
-                    exit;
-                }
-
-                $this->courseModel->unenrollStudent($courseId, $studentId);
-                header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=enrollments&success=Student unenrolled");
-                exit;
-                break;
-
-            // Link exam to course
-            case 'add_exam_to_course':
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $this->renderError("CSRF validation failed.");
-                    }
-                    $courseId = intval($_POST['course_id']);
-                    $examId = intval($_POST['exam_id']);
-
-                    $course = $this->courseModel->getById($courseId);
-                    if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                        header("Location: index.php?route=admin/courses&error=Unauthorized");
-                        exit;
-                    }
-
-                    $db = Database::getInstance()->getConnection();
-                    $stmt = $db->prepare("UPDATE exams SET course_id = ? WHERE id = ?");
-                    $stmt->execute([$courseId, $examId]);
-
-                    header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=quizzes&success=Quiz linked to course");
-                    exit;
-                }
-                break;
-
-            case 'unlink_exam':
-                $courseId = intval($_GET['course_id'] ?? 0);
-                $examId = intval($_GET['exam_id'] ?? 0);
-
-                $course = $this->courseModel->getById($courseId);
-                if (!$course || (!Auth::hasRole(['admin']) && $course['instructor_id'] != Session::get('user_id'))) {
-                    header("Location: index.php?route=admin/courses&error=Unauthorized");
-                    exit;
-                }
-
-                $db = Database::getInstance()->getConnection();
-                $stmt = $db->prepare("UPDATE exams SET course_id = NULL WHERE id = ?");
-                $stmt->execute([$examId]);
-
-                header("Location: index.php?route=admin/courses&action=view&id=$courseId&tab=quizzes&success=Quiz unlinked from course");
-                exit;
-                break;
+        try {
+            $this->courseModel->create([
+                'title' => $titleVal,
+                'description' => $description,
+                'category_id' => $categoryId,
+                'instructor_id' => $instructorId,
+                'thumbnail' => $thumbnailPath,
+                'status' => $status,
+                'pass_percentage' => floatval($passPercentage)
+            ]);
+            header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course successfully created."));
+            exit;
+        } catch (Exception $e) {
+            Session::set('validation_errors', ['db' => $e->getMessage()]);
+            Session::set('form_data', $_POST);
+            header("Location: index.php?route=admin/courses&action=create");
+            exit;
         }
     }
 
-    private function renderError($msg) {
-        $pageTitle = 'Error';
-        include __DIR__ . '/../views/layout_header.php';
-        echo "<div class='container py-5'><div class='alert alert-danger shadow border-0 p-4 rounded-3 d-flex align-items-center gap-3'><i data-lucide='alert-octagon' size='36'></i><div><h4 class='fw-bold mb-1'>Error Occurred</h4><p class='mb-0'>$msg</p></div></div></div>";
-        include __DIR__ . '/../views/layout_footer.php';
+    /**
+     * Action: Show Edit Form
+     */
+    private function handleEditGet() {
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $course = $this->courseModel->find($id);
+
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+
+        // Server-side check for instructor access scope
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $title = "Edit Course";
+        $submitUrl = "index.php?route=admin/courses&action=edit&id=" . $course['id'];
+        $isEdit = true;
+
+        $errors = Session::get('validation_errors') ?? [];
+        $formData = Session::get('form_data') ?? $course;
+
+        Session::delete('validation_errors');
+        Session::delete('form_data');
+
+        $instructors = $this->getInstructorsList();
+        $flatCategories = $this->categoryModel->getTreeFlat();
+
+        include __DIR__ . '/../views/courses/form.php';
+    }
+
+    /**
+     * Action: Handle Course Update (POST)
+     */
+    private function handleEditPost() {
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $course = $this->courseModel->find($id);
+
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+
+        // Server-side check for instructor access scope
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            Session::set('form_data', $_POST);
+            header("Location: index.php?route=admin/courses&action=edit&id=" . $id . "&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $user = Auth::user();
+
+        // Prepare inputs
+        $titleVal = trim($_POST['title'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $categoryId = !empty($_POST['category_id']) ? (int)$_POST['category_id'] : null;
+        
+        // Instructors cannot reassign the course to someone else
+        $instructorId = ($user['role'] === 'instructor') ? $course['instructor_id'] : (!empty($_POST['instructor_id']) ? (int)$_POST['instructor_id'] : null);
+        
+        $status = $_POST['status'] ?? 'draft';
+        $passPercentage = isset($_POST['pass_percentage']) ? trim($_POST['pass_percentage']) : '';
+
+        $errors = [];
+
+        // Validate title
+        if (empty($titleVal)) {
+            $errors['title'] = "Course title is required.";
+        } elseif (strlen($titleVal) > 200) {
+            $errors['title'] = "Course title must not exceed 200 characters.";
+        }
+
+        // Validate category_id
+        if (empty($categoryId)) {
+            $errors['category_id'] = "Category is required.";
+        } else {
+            $categoryObj = $this->categoryModel->find($categoryId);
+            if (!$categoryObj) {
+                $errors['category_id'] = "Selected category does not exist.";
+            }
+        }
+
+        // Validate instructor_id
+        if (empty($instructorId)) {
+            $errors['instructor_id'] = "Instructor is required.";
+        } else {
+            $instructorObj = $this->getUserById($instructorId);
+            if (!$instructorObj || !in_array($instructorObj['role'], ['instructor', 'admin'])) {
+                $errors['instructor_id'] = "Selected user must be an instructor or an admin.";
+            }
+        }
+
+        // Validate pass_percentage
+        if ($passPercentage === '') {
+            $errors['pass_percentage'] = "Pass percentage is required.";
+        } elseif (!is_numeric($passPercentage)) {
+            $errors['pass_percentage'] = "Pass percentage must be a numeric value.";
+        } else {
+            $passFloat = floatval($passPercentage);
+            if ($passFloat < 0 || $passFloat > 100) {
+                $errors['pass_percentage'] = "Pass percentage must be between 0 and 100.";
+            }
+        }
+
+        // Validate status
+        if (!in_array($status, ['draft', 'published', 'archived'])) {
+            $errors['status'] = "Invalid status selected.";
+        }
+
+        // Validate and upload thumbnail
+        $thumbnailPath = $course['thumbnail'] ?? null;
+        if (isset($_FILES['thumbnail']) && $_FILES['thumbnail']['error'] === UPLOAD_ERR_OK) {
+            $fileTmpPath = $_FILES['thumbnail']['tmp_name'];
+            $fileSize = $_FILES['thumbnail']['size'];
+            $fileName = $_FILES['thumbnail']['name'];
+
+            if ($fileSize > 2 * 1024 * 1024) {
+                $errors['thumbnail'] = "The thumbnail image must not exceed 2MB.";
+            } else {
+                $imageInfo = @getimagesize($fileTmpPath);
+                if ($imageInfo === false) {
+                    $errors['thumbnail'] = "Uploaded file is not a valid image.";
+                } else {
+                    $mimeType = $imageInfo['mime'];
+                    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                    if (!in_array($mimeType, $allowedMimes)) {
+                        $errors['thumbnail'] = "Only JPG, PNG, GIF, and WEBP images are allowed.";
+                    } else {
+                        $uploadDir = __DIR__ . '/../../uploads/';
+                        if (!is_dir($uploadDir)) {
+                            mkdir($uploadDir, 0777, true);
+                        }
+                        $cleanName = preg_replace("/[^A-Za-z0-9._-]/", "_", basename($fileName));
+                        $uniqueName = time() . '_' . $cleanName;
+                        if (move_uploaded_file($fileTmpPath, $uploadDir . $uniqueName)) {
+                            // Optionally delete old thumbnail if exists
+                            if (!empty($course['thumbnail'])) {
+                                $oldFile = __DIR__ . '/../../' . $course['thumbnail'];
+                                if (file_exists($oldFile) && is_file($oldFile)) {
+                                    @unlink($oldFile);
+                                }
+                            }
+                            $thumbnailPath = 'uploads/' . $uniqueName;
+                        } else {
+                            $errors['thumbnail'] = "Failed to save uploaded image.";
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!empty($errors)) {
+            Session::set('validation_errors', $errors);
+            $oldData = $_POST;
+            $oldData['id'] = $id;
+            $oldData['thumbnail'] = $course['thumbnail'] ?? null;
+            Session::set('form_data', $oldData);
+            header("Location: index.php?route=admin/courses&action=edit&id=" . $id);
+            exit;
+        }
+
+        try {
+            $this->courseModel->update($id, [
+                'title' => $titleVal,
+                'description' => $description,
+                'category_id' => $categoryId,
+                'instructor_id' => $instructorId,
+                'thumbnail' => $thumbnailPath,
+                'status' => $status,
+                'pass_percentage' => floatval($passPercentage)
+            ]);
+            header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course successfully updated."));
+            exit;
+        } catch (Exception $e) {
+            Session::set('validation_errors', ['db' => $e->getMessage()]);
+            $oldData = $_POST;
+            $oldData['id'] = $id;
+            $oldData['thumbnail'] = $course['thumbnail'] ?? null;
+            Session::set('form_data', $oldData);
+            header("Location: index.php?route=admin/courses&action=edit&id=" . $id);
+            exit;
+        }
+    }
+
+    /**
+     * Action: Handle status change (draft/published/archived)
+     */
+    private function handleStatusChange() {
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $status = trim($_GET['status'] ?? '');
+
+        $course = $this->courseModel->find($id);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+
+        // Server-side check for instructor access scope
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        if (!in_array($status, ['draft', 'published', 'archived'])) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Invalid status value."));
+            exit;
+        }
+
+        $token = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $this->courseModel->setStatus($id, $status);
+        header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course status successfully changed to " . ucfirst($status) . "."));
         exit;
+    }
+
+    /**
+     * Action: Handle Delete Action
+     */
+    private function handleDelete() {
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $course = $this->courseModel->find($id);
+
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+
+        // Server-side check for instructor access scope
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $token = $_GET['csrf_token'] ?? $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        try {
+            $this->courseModel->delete($id);
+            // Optionally delete thumbnail file if exists
+            if (!empty($course['thumbnail'])) {
+                $file = __DIR__ . '/../../' . $course['thumbnail'];
+                if (file_exists($file) && is_file($file)) {
+                    @unlink($file);
+                }
+            }
+            header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course successfully deleted."));
+            exit;
+        } catch (Exception $e) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode($e->getMessage()));
+            exit;
+        }
+    }
+
+    /**
+     * Helper: Enforce instructor server-side course scoping
+     */
+    private function requireCourseOwnershipOrAdmin($course) {
+        $user = Auth::user();
+        if ($user['role'] !== 'admin' && (int)$course['instructor_id'] !== (int)$user['id']) {
+            http_response_code(403);
+            echo "<div style='font-family:sans-serif; text-align:center; padding:50px;'>";
+            echo "<h2 style='color:#dc3545;'>403 - Access Forbidden</h2>";
+            echo "<p>You do not have permission to view, edit, or manage this course because it belongs to another instructor.</p>";
+            echo "<p><a href='index.php?route=admin/courses'>Return to My Courses</a></p>";
+            echo "</div>";
+            exit;
+        }
+    }
+
+    /**
+     * Helper: Fetch list of instructors/admins for selection
+     */
+    private function getInstructorsList() {
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->query("SELECT id, name, role FROM users WHERE role IN ('instructor', 'admin') AND status = 'active' ORDER BY name ASC");
+        return $stmt->fetchAll() ?: [];
+    }
+
+    /**
+     * Helper: Retrieve a single user by ID
+     */
+    private function getUserById($id) {
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare("SELECT id, name, role FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: null;
     }
 }

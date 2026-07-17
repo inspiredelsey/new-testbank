@@ -138,7 +138,10 @@ class Database {
         $alters = [
             "ALTER TABLE exams ADD COLUMN course_id INTEGER",
             "ALTER TABLE questions ADD COLUMN case_id INTEGER",
-            "ALTER TABLE questions ADD COLUMN case_order INTEGER"
+            "ALTER TABLE questions ADD COLUMN case_order INTEGER",
+            "ALTER TABLE courses ADD COLUMN category_id INTEGER",
+            "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
+            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00"
         ];
         foreach ($alters as $alter) {
             try {

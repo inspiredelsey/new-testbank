@@ -7,10 +7,15 @@ CREATE TABLE IF NOT EXISTS courses (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
+  category_id INT NULL,
   instructor_id INT NULL,
-  status ENUM('draft', 'published') NOT NULL DEFAULT 'draft',
+  thumbnail VARCHAR(255) NULL,
+  status ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'draft',
+  pass_percentage DECIMAL(5,2) NOT NULL DEFAULT 50.00,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
   FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_course_category (category_id),
   INDEX idx_course_instructor (instructor_id),
   INDEX idx_course_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

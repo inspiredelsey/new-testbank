@@ -10,13 +10,86 @@ class Course {
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
+        
+        // Robust SQLite/MySQL resilient check/add to ensure columns always exist
+        try {
+            @$this->db->exec("ALTER TABLE courses ADD COLUMN category_id INT NULL");
+        } catch (Exception $e) {}
+        try {
+            @$this->db->exec("ALTER TABLE courses ADD COLUMN thumbnail VARCHAR(255) NULL");
+        } catch (Exception $e) {}
+        try {
+            @$this->db->exec("ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) NOT NULL DEFAULT 50.00");
+        } catch (Exception $e) {}
     }
 
-    public function getAll($filters = []) {
+    /**
+     * Get all courses with category name and instructor name joined.
+     */
+    public function all() {
         $query = "
-            SELECT c.*, u.name as instructor_name,
+            SELECT c.*, cat.name as category_name, u.name as instructor_name,
                    (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id) as enrollment_count
             FROM courses c
+            LEFT JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN users u ON c.instructor_id = u.id
+            ORDER BY c.created_at DESC
+        ";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll() ?: [];
+    }
+
+    /**
+     * Get courses for a specific instructor with category name and instructor name joined.
+     */
+    public function byInstructor($instructorId) {
+        $query = "
+            SELECT c.*, cat.name as category_name, u.name as instructor_name,
+                   (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id) as enrollment_count
+            FROM courses c
+            LEFT JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN users u ON c.instructor_id = u.id
+            WHERE c.instructor_id = ?
+            ORDER BY c.created_at DESC
+        ";
+        $stmt = $this->db->prepare($query);
+        $stmt->execute([$instructorId]);
+        return $stmt->fetchAll() ?: [];
+    }
+
+    /**
+     * Find a course by ID with category and instructor names joined.
+     */
+    public function find($id) {
+        $stmt = $this->db->prepare("
+            SELECT c.*, cat.name as category_name, u.name as instructor_name,
+                   (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id) as enrollment_count
+            FROM courses c
+            LEFT JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN users u ON c.instructor_id = u.id
+            WHERE c.id = ?
+        ");
+        $stmt->execute([$id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * Legacy support / alias to find()
+     */
+    public function getById($id) {
+        return $this->find($id);
+    }
+
+    /**
+     * Legacy support / alias to support filters in index/list views if needed
+     */
+    public function getAll($filters = []) {
+        $query = "
+            SELECT c.*, cat.name as category_name, u.name as instructor_name,
+                   (SELECT COUNT(*) FROM course_enrollments ce WHERE ce.course_id = c.id) as enrollment_count
+            FROM courses c
+            LEFT JOIN categories cat ON c.category_id = cat.id
             LEFT JOIN users u ON c.instructor_id = u.id
             WHERE 1=1
         ";
@@ -26,66 +99,95 @@ class Course {
             $query .= " AND c.instructor_id = ?";
             $params[] = $filters['instructor_id'];
         }
+        if (!empty($filters['category_id'])) {
+            $query .= " AND c.category_id = ?";
+            $params[] = $filters['category_id'];
+        }
         if (!empty($filters['status'])) {
             $query .= " AND c.status = ?";
             $params[] = $filters['status'];
         }
         if (!empty($filters['search'])) {
-            $query .= " AND c.title LIKE ?";
+            $query .= " AND (c.title LIKE ? OR c.description LIKE ?)";
+            $params[] = '%' . $filters['search'] . '%';
             $params[] = '%' . $filters['search'] . '%';
         }
 
-        $query .= " ORDER BY c.id DESC";
+        $query .= " ORDER BY c.created_at DESC";
         $stmt = $this->db->prepare($query);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        return $stmt->fetchAll() ?: [];
     }
 
-    public function getById($id) {
-        $stmt = $this->db->prepare("
-            SELECT c.*, u.name as instructor_name 
-            FROM courses c 
-            LEFT JOIN users u ON c.instructor_id = u.id 
-            WHERE c.id = ?
-        ");
-        $stmt->execute([$id]);
-        return $stmt->fetch();
-    }
-
+    /**
+     * Create a new course.
+     */
     public function create($data) {
         $stmt = $this->db->prepare("
-            INSERT INTO courses (title, description, instructor_id, status)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO courses (title, description, category_id, instructor_id, thumbnail, status, pass_percentage)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $data['title'],
             $data['description'] ?? null,
-            $data['instructor_id'] ?? null,
-            $data['status'] ?? 'draft'
+            !empty($data['category_id']) ? intval($data['category_id']) : null,
+            !empty($data['instructor_id']) ? intval($data['instructor_id']) : null,
+            $data['thumbnail'] ?? null,
+            $data['status'] ?? 'draft',
+            isset($data['pass_percentage']) ? floatval($data['pass_percentage']) : 50.00
         ]);
         return $this->db->lastInsertId();
     }
 
+    /**
+     * Update an existing course.
+     */
     public function update($id, $data) {
         $stmt = $this->db->prepare("
             UPDATE courses 
-            SET title = ?, description = ?, instructor_id = ?, status = ? 
+            SET title = ?, description = ?, category_id = ?, instructor_id = ?, thumbnail = ?, status = ?, pass_percentage = ?
             WHERE id = ?
         ");
         return $stmt->execute([
             $data['title'],
             $data['description'] ?? null,
-            $data['instructor_id'] ?? null,
+            !empty($data['category_id']) ? intval($data['category_id']) : null,
+            !empty($data['instructor_id']) ? intval($data['instructor_id']) : null,
+            $data['thumbnail'] ?? null,
             $data['status'] ?? 'draft',
+            isset($data['pass_percentage']) ? floatval($data['pass_percentage']) : 50.00,
             $id
         ]);
     }
 
+    /**
+     * Change course status.
+     */
+    public function setStatus($id, $status) {
+        $stmt = $this->db->prepare("UPDATE courses SET status = ? WHERE id = ?");
+        return $stmt->execute([$status, $id]);
+    }
+
+    /**
+     * Safely delete a course if it has no course_enrollments.
+     */
     public function delete($id) {
+        // Check first whether the course has any course_enrollments rows
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM course_enrollments WHERE course_id = ?");
+        $stmt->execute([$id]);
+        $enrollmentsCount = intval($stmt->fetchColumn());
+
+        if ($enrollmentsCount > 0) {
+            throw new Exception("Cannot delete course because there are active student enrollments. Please archive the course instead.");
+        }
+
+        // Hard delete
         $stmt = $this->db->prepare("DELETE FROM courses WHERE id = ?");
         return $stmt->execute([$id]);
     }
 
+    // --- Core enrollment and management helper methods preserved from original Course model ---
+    
     public function enrollStudent($courseId, $studentId) {
         try {
             $stmt = $this->db->prepare("
@@ -94,7 +196,6 @@ class Course {
             ");
             return $stmt->execute([$courseId, $studentId]);
         } catch (PDOException $e) {
-            // Already enrolled or other error
             return false;
         }
     }
@@ -127,7 +228,7 @@ class Course {
             ORDER BY ce.enrolled_at DESC
         ");
         $stmt->execute([$studentId]);
-        return $stmt->fetchAll();
+        return $stmt->fetchAll() ?: [];
     }
 
     public function getEnrolledStudents($courseId) {
@@ -139,7 +240,7 @@ class Course {
             ORDER BY u.name ASC
         ");
         $stmt->execute([$courseId]);
-        return $stmt->fetchAll();
+        return $stmt->fetchAll() ?: [];
     }
 
     public function getNonEnrolledStudents($courseId) {
@@ -152,6 +253,6 @@ class Course {
             ORDER BY name ASC
         ");
         $stmt->execute([$courseId]);
-        return $stmt->fetchAll();
+        return $stmt->fetchAll() ?: [];
     }
 }

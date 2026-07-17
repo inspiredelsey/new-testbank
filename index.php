@@ -65,6 +65,13 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/enrollments':
+        require_once __DIR__ . '/testbank/admin/controllers/EnrollmentController.php';
+        $controller = new EnrollmentController();
+        $action = $_GET['action'] ?? 'manage';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/categories':
         require_once __DIR__ . '/testbank/admin/controllers/CategoryController.php';
         $controller = new CategoryController();
@@ -90,6 +97,13 @@ switch ($route) {
         require_once __DIR__ . '/testbank/admin/controllers/AdminAttemptController.php';
         $controller = new AdminAttemptController();
         $action = $_GET['action'] ?? 'index';
+        $controller->handleRequest($action);
+        break;
+
+    case 'admin/users':
+        require_once __DIR__ . '/testbank/admin/controllers/UserController.php';
+        $controller = new UserController();
+        $action = $_GET['action'] ?? 'list';
         $controller->handleRequest($action);
         break;
 

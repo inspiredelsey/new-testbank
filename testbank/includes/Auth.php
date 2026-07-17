@@ -46,6 +46,10 @@ class Auth {
         ];
     }
 
+    public static function user() {
+        return self::getUser();
+    }
+
     public static function getRole() {
         return Session::get('user_role');
     }
