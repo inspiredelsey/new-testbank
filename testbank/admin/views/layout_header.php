@@ -355,7 +355,13 @@ $activeRoute = $_GET['route'] ?? '';
         </div>
 
         <ul class="nav flex-column mt-3 flex-grow-1">
-            <?php if (Auth::isInstructor()): ?>
+            <?php if (strpos($activeRoute, 'student/') !== false || !Auth::isInstructor()): ?>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/') !== false || empty($activeRoute)) ? 'active' : ''; ?>" href="index.php?route=student/dashboard">
+                        <i data-lucide="book-open"></i> Student Portal
+                    </a>
+                </li>
+            <?php else: ?>
                 <li class="nav-item">
                     <a class="nav-link <?php echo (strpos($activeRoute, 'admin/courses') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/courses">
                         <i data-lucide="graduation-cap"></i> Courses
@@ -388,12 +394,6 @@ $activeRoute = $_GET['route'] ?? '';
                     </a>
                 </li>
                 <?php endif; ?>
-            <?php else: ?>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/') !== false || empty($activeRoute)) ? 'active' : ''; ?>" href="index.php?route=student/dashboard">
-                        <i data-lucide="book-open"></i> Student Portal
-                    </a>
-                </li>
             <?php endif; ?>
         </ul>
 
@@ -414,9 +414,15 @@ $activeRoute = $_GET['route'] ?? '';
             </h4>
             <div class="d-flex align-items-center gap-3">
                 <?php if (Auth::isInstructor()): ?>
-                    <a class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" href="index.php?route=student/dashboard">
-                        <i data-lucide="book-open" size="16"></i> Go to Student Portal
-                    </a>
+                    <?php if (strpos($activeRoute, 'student/') !== false): ?>
+                        <a class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" href="index.php?route=admin/courses">
+                            <i data-lucide="shield" size="16"></i> Go to Admin Portal
+                        </a>
+                    <?php else: ?>
+                        <a class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" href="index.php?route=student/dashboard">
+                            <i data-lucide="book-open" size="16"></i> Go to Student Portal
+                        </a>
+                    <?php endif; ?>
                 <?php else: ?>
                     <span class="text-muted small font-sans"><i data-lucide="shield" size="14"></i> Student Mode</span>
                 <?php endif; ?>

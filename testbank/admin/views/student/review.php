@@ -125,4 +125,4 @@ $passed = $attempt['passed'] ? true : false;
     </div>
 </div>
 
-<?php include __DIR__ . '/../layout_header.php'; ?>
+<?php include __DIR__ . '/../layout_footer.php'; ?>

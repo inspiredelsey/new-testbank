@@ -94,7 +94,7 @@ class AuthController {
 
     private function redirectUserBasedOnRole() {
         if (Auth::isInstructor()) {
-            header("Location: index.php?route=admin/exams");
+            header("Location: index.php?route=admin/courses");
         } else {
             header("Location: index.php?route=student/dashboard");
         }
