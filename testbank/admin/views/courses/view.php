@@ -23,9 +23,44 @@ $activeTab = $_GET['tab'] ?? 'documents';
             <p class="text-muted small mb-0"><i data-lucide="user-check" size="14" class="me-1"></i>Instructor: <strong><?php echo htmlspecialchars($course['instructor_name'] ?? 'Unassigned'); ?></strong></p>
         </div>
         
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            <!-- Edit Details Button -->
             <a href="index.php?route=admin/courses&action=edit&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-light border d-flex align-items-center gap-1.5 py-2 px-3 fw-medium">
                 <i data-lucide="edit-3" size="16"></i> Edit Details
+            </a>
+
+            <!-- Change Status Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center gap-1.5 py-2 px-3 fw-medium" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i data-lucide="settings-2" size="16"></i> Status: <?php echo ucfirst($course['status']); ?>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="font-size: 0.85rem;">
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($course['status'] === 'draft') ? 'active' : ''; ?>" 
+                           href="index.php?route=admin/courses&action=status&id=<?php echo $course['id']; ?>&status=draft&redirect=view&csrf_token=<?php echo Session::getCSRFToken(); ?>">
+                            <span class="w-2.5 h-2.5 rounded-circle bg-warning d-inline-block" style="width: 8px; height: 8px;"></span> Draft
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($course['status'] === 'published') ? 'active' : ''; ?>" 
+                           href="index.php?route=admin/courses&action=status&id=<?php echo $course['id']; ?>&status=published&redirect=view&csrf_token=<?php echo Session::getCSRFToken(); ?>">
+                            <span class="w-2.5 h-2.5 rounded-circle bg-success d-inline-block" style="width: 8px; height: 8px;"></span> Publish
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($course['status'] === 'archived') ? 'active' : ''; ?>" 
+                           href="index.php?route=admin/courses&action=status&id=<?php echo $course['id']; ?>&status=archived&redirect=view&csrf_token=<?php echo Session::getCSRFToken(); ?>">
+                            <span class="w-2.5 h-2.5 rounded-circle bg-secondary d-inline-block" style="width: 8px; height: 8px;"></span> Archive
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Delete Course Button -->
+            <a href="index.php?route=admin/courses&action=delete&id=<?php echo $course['id']; ?>&csrf_token=<?php echo Session::getCSRFToken(); ?>" 
+               class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1.5 py-2 px-3 fw-medium" 
+               onclick="return confirm('Are you sure you want to permanently delete the course \'<?php echo htmlspecialchars(addslashes($course['title'])); ?>\'? This will remove all associated content and cannot be undone.');">
+                <i data-lucide="trash-2" size="16"></i> Delete Course
             </a>
         </div>
     </div>
@@ -96,7 +131,7 @@ $activeTab = $_GET['tab'] ?? 'documents';
                                     </div>
                                     <div>
                                         <h6 class="fw-bold text-dark mb-0"><?php echo htmlspecialchars($doc['title']); ?></h6>
-                                        <small class="text-muted font-sans" style="font-size: 0.75rem;"><?php echo htmlspecialchars($doc['file_name']); ?> | uploaded <?php echo date('M d, Y', strtotime($doc['created_at'])); ?></small>
+                                        <small class="text-muted font-sans" style="font-size: 0.75rem;"><?php echo htmlspecialchars($doc['file_name'] ?? basename($doc['file_path'])); ?> | uploaded <?php echo date('M d, Y', strtotime($doc['created_at'])); ?></small>
                                     </div>
                                 </div>
                                 <div class="d-flex gap-1">

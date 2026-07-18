@@ -87,33 +87,39 @@ include __DIR__ . '/../layout_header.php';
                                     <th>Passing Score</th>
                                     <th>Status</th>
                                     <th>Created At</th>
-                                    <th class="text-end pe-4" style="width: 250px;">Actions</th>
+                                    <th class="text-end pe-4" style="width: 120px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($courses as $c): ?>
                                     <tr>
-                                        <td class="ps-4 py-3">
+                                        <td class="ps-4 py-3" style="cursor: pointer;" onclick="if (!event.target.closest('a')) window.location.href='index.php?route=admin/courses&action=view&id=<?php echo $c['id']; ?>';">
                                             <div class="d-flex align-items-center gap-3">
                                                 <!-- Thumbnail / Cover Image -->
                                                 <?php if (!empty($c['thumbnail'])): ?>
-                                                    <img src="<?php echo htmlspecialchars($c['thumbnail']); ?>" 
-                                                         alt="<?php echo htmlspecialchars($c['title']); ?>" 
-                                                         referrerpolicy="no-referrer"
-                                                         class="rounded border bg-light" 
-                                                         style="width: 50px; height: 50px; object-fit: cover;">
+                                                    <a href="index.php?route=admin/courses&action=view&id=<?php echo $c['id']; ?>">
+                                                        <img src="<?php echo htmlspecialchars($c['thumbnail']); ?>" 
+                                                             alt="<?php echo htmlspecialchars($c['title']); ?>" 
+                                                             referrerpolicy="no-referrer"
+                                                             class="rounded border bg-light" 
+                                                             style="width: 50px; height: 50px; object-fit: cover;">
+                                                    </a>
                                                 <?php else: ?>
-                                                    <div class="bg-primary-subtle text-primary rounded border d-flex align-items-center justify-content-center" 
-                                                         style="width: 50px; height: 50px;">
-                                                        <i data-lucide="image" size="20" style="opacity: 0.85;"></i>
-                                                    </div>
+                                                    <a href="index.php?route=admin/courses&action=view&id=<?php echo $c['id']; ?>" class="text-decoration-none">
+                                                        <div class="bg-primary-subtle text-primary rounded border d-flex align-items-center justify-content-center" 
+                                                             style="width: 50px; height: 50px;">
+                                                            <i data-lucide="image" size="20" style="opacity: 0.85;"></i>
+                                                        </div>
+                                                    </a>
                                                 <?php endif; ?>
                                                 
                                                 <div>
                                                     <h6 class="fw-bold text-slate-800 mb-0">
-                                                        <?php echo htmlspecialchars($c['title']); ?>
+                                                        <a href="index.php?route=admin/courses&action=view&id=<?php echo $c['id']; ?>" class="text-slate-800 text-decoration-none link-primary">
+                                                            <?php echo htmlspecialchars($c['title']); ?>
+                                                        </a>
                                                     </h6>
-                                                    <small class="text-muted text-truncate d-block" style="max-width: 300px;" title="<?php echo htmlspecialchars($c['description'] ?? ''); ?>">
+                                                    <small class="text-slate-500 text-truncate d-block" style="max-width: 300px;" title="<?php echo htmlspecialchars($c['description'] ?? ''); ?>">
                                                         <?php echo htmlspecialchars($c['description'] ?: 'No description provided.'); ?>
                                                     </small>
                                                 </div>
@@ -147,57 +153,30 @@ include __DIR__ . '/../layout_header.php';
                                         </td>
                                         <td class="text-end pe-4">
                                             <div class="d-inline-flex gap-1.5 align-items-center">
-                                                <!-- Quick Status Dropdown -->
+                                                <!-- Actions Dropdown -->
                                                 <div class="dropdown">
-                                                    <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center gap-1 font-sans" 
+                                                    <button class="btn btn-sm btn-light border dropdown-toggle d-flex align-items-center gap-1.5 px-3 py-1.5 fw-medium font-sans" 
                                                             type="button" 
                                                             data-bs-toggle="dropdown" 
                                                             aria-expanded="false">
-                                                        <i data-lucide="settings-2" size="13"></i> Status
+                                                        <i data-lucide="more-vertical" size="14"></i> Actions
                                                     </button>
-                                                    <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="font-size: 0.85rem;">
+                                                    <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="font-size: 0.85rem; min-width: 150px;">
                                                         <li>
-                                                            <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($c['status'] === 'draft') ? 'active' : ''; ?>" 
-                                                               href="index.php?route=admin/courses&action=status&id=<?php echo $c['id']; ?>&status=draft&csrf_token=<?php echo $csrfToken; ?>">
-                                                                <span class="w-2.5 h-2.5 rounded-circle bg-warning d-inline-block"></span> Draft
+                                                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="index.php?route=admin/courses&action=edit&id=<?php echo $c['id']; ?>">
+                                                                <i data-lucide="edit-3" size="14" class="text-muted"></i> Edit Details
                                                             </a>
                                                         </li>
+                                                        <li><hr class="dropdown-divider"></li>
                                                         <li>
-                                                            <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($c['status'] === 'published') ? 'active' : ''; ?>" 
-                                                               href="index.php?route=admin/courses&action=status&id=<?php echo $c['id']; ?>&status=published&csrf_token=<?php echo $csrfToken; ?>">
-                                                                <span class="w-2.5 h-2.5 rounded-circle bg-success d-inline-block"></span> Publish
-                                                            </a>
-                                                        </li>
-                                                        <li>
-                                                            <a class="dropdown-item d-flex align-items-center gap-2 <?php echo ($c['status'] === 'archived') ? 'active' : ''; ?>" 
-                                                               href="index.php?route=admin/courses&action=status&id=<?php echo $c['id']; ?>&status=archived&csrf_token=<?php echo $csrfToken; ?>">
-                                                                <span class="w-2.5 h-2.5 rounded-circle bg-secondary d-inline-block"></span> Archive
+                                                            <a class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger" 
+                                                               href="index.php?route=admin/courses&action=delete&id=<?php echo $c['id']; ?>&csrf_token=<?php echo $csrfToken; ?>"
+                                                               onclick="return confirmDelete(event, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>')">
+                                                                <i data-lucide="trash-2" size="14" class="text-danger"></i> Delete Course
                                                             </a>
                                                         </li>
                                                     </ul>
                                                 </div>
-
-                                                <!-- Enrollments button -->
-                                                <a href="index.php?route=admin/enrollments&action=manage&course_id=<?php echo $c['id']; ?>" 
-                                                   class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 px-2" 
-                                                   title="Manage Enrollments">
-                                                    <i data-lucide="users" size="13"></i> Enrollments
-                                                </a>
-
-                                                <!-- Edit button -->
-                                                <a href="index.php?route=admin/courses&action=edit&id=<?php echo $c['id']; ?>" 
-                                                   class="btn btn-sm btn-light border d-flex align-items-center gap-1 px-2" 
-                                                   title="Edit course">
-                                                    <i data-lucide="edit-3" size="13"></i> Edit
-                                                </a>
-
-                                                <!-- Delete button -->
-                                                <a href="index.php?route=admin/courses&action=delete&id=<?php echo $c['id']; ?>&csrf_token=<?php echo $csrfToken; ?>" 
-                                                   class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 px-2" 
-                                                   title="Delete course"
-                                                   onclick="return confirmDelete(event, '<?php echo htmlspecialchars(addslashes($c['title'])); ?>')">
-                                                    <i data-lucide="trash-2" size="13"></i> Delete
-                                                </a>
                                             </div>
                                         </td>
                                     </tr>

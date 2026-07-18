@@ -173,3 +173,20 @@ CREATE TABLE attempt_answers (
   INDEX idx_answer_attempt (attempt_id),
   INDEX idx_answer_question (question_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Documents table for course content attachments
+CREATE TABLE IF NOT EXISTS documents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  course_id INT NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  file_path VARCHAR(255) NOT NULL,
+  file_type VARCHAR(50) NOT NULL,
+  description TEXT NULL,
+  status ENUM('draft', 'published') NOT NULL DEFAULT 'published',
+  order_index INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  INDEX idx_document_course (course_id),
+  INDEX idx_document_order (order_index)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

@@ -5,17 +5,29 @@
 
 require_once __DIR__ . '/../models/Course.php';
 require_once __DIR__ . '/../models/Category.php';
+require_once __DIR__ . '/../models/Document.php';
+require_once __DIR__ . '/../models/Link.php';
+require_once __DIR__ . '/../models/Exam.php';
+require_once __DIR__ . '/../models/LearningPath.php';
 require_once __DIR__ . '/../../includes/Auth.php';
 require_once __DIR__ . '/../../includes/Session.php';
 
 class CourseController {
     private $courseModel;
     private $categoryModel;
+    private $documentModel;
+    private $linkModel;
+    private $examModel;
+    private $lpModel;
 
     public function __construct() {
         Auth::requireRole(['admin', 'instructor']);
         $this->courseModel = new Course();
         $this->categoryModel = new Category();
+        $this->documentModel = new Document();
+        $this->linkModel = new Link();
+        $this->examModel = new Exam();
+        $this->lpModel = new LearningPath();
     }
 
     /**
@@ -26,6 +38,10 @@ class CourseController {
             case 'index':
             case 'list':
                 $this->handleList();
+                break;
+
+            case 'view':
+                $this->handleView();
                 break;
 
             case 'create':
@@ -50,6 +66,54 @@ class CourseController {
 
             case 'delete':
                 $this->handleDelete();
+                break;
+
+            case 'add_document':
+                $this->handleAddDocument();
+                break;
+
+            case 'delete_document':
+                $this->handleDeleteDocument();
+                break;
+
+            case 'add_link':
+                $this->handleAddLink();
+                break;
+
+            case 'delete_link':
+                $this->handleDeleteLink();
+                break;
+
+            case 'add_exam_to_course':
+                $this->handleAddExamToCourse();
+                break;
+
+            case 'unlink_exam':
+                $this->handleUnlinkExam();
+                break;
+
+            case 'add_lp_item':
+                $this->handleAddLPItem();
+                break;
+
+            case 'delete_lp_item':
+                $this->handleDeleteLPItem();
+                break;
+
+            case 'update_lp_prereq':
+                $this->handleUpdateLPPrereq();
+                break;
+
+            case 'update_lp_orders':
+                $this->handleUpdateLPOrders();
+                break;
+
+            case 'enroll_student':
+                $this->handleEnrollStudent();
+                break;
+
+            case 'unenroll_student':
+                $this->handleUnenrollStudent();
                 break;
 
             default:
@@ -456,7 +520,13 @@ class CourseController {
         }
 
         $this->courseModel->setStatus($id, $status);
-        header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course status successfully changed to " . ucfirst($status) . "."));
+        
+        $redirect = trim($_GET['redirect'] ?? '');
+        if ($redirect === 'view') {
+            header("Location: index.php?route=admin/courses&action=view&id={$id}&success=" . urlencode("Course status successfully changed to " . ucfirst($status) . "."));
+        } else {
+            header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course status successfully changed to " . ucfirst($status) . "."));
+        }
         exit;
     }
 
@@ -496,6 +566,407 @@ class CourseController {
             header("Location: index.php?route=admin/courses&action=list&error=" . urlencode($e->getMessage()));
             exit;
         }
+    }
+
+    /**
+     * Action: View Course details and tabbed submenu management
+     */
+    private function handleView() {
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $course = $this->courseModel->find($id);
+
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $activeTab = $_GET['tab'] ?? 'documents';
+
+        // Load all data to fully populate all views and modals
+        $documents = $this->documentModel->forCourse($id);
+        $links = $this->linkModel->getByCourse($id);
+        
+        // Retrieve linked exams/quizzes
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare("SELECT e.*, c.name as category_name FROM exams e LEFT JOIN categories c ON e.category_id = c.id WHERE e.course_id = ? ORDER BY e.title ASC");
+        $stmt->execute([$id]);
+        $courseExams = $stmt->fetchAll() ?: [];
+
+        // Retrieve unlinked exams/quizzes to offer for linking
+        $stmt = $db->prepare("SELECT e.*, c.name as category_name FROM exams e LEFT JOIN categories c ON e.category_id = c.id WHERE e.course_id IS NULL OR e.course_id = 0 ORDER BY e.title ASC");
+        $stmt->execute();
+        $allExams = $stmt->fetchAll() ?: [];
+
+        $lpItems = $this->lpModel->getItemsByCourse($id) ?: [];
+        $enrolledStudents = $this->courseModel->getEnrolledStudents($id) ?: [];
+        $nonEnrolledStudents = $this->courseModel->getNonEnrolledStudents($id) ?: [];
+
+        include __DIR__ . '/../views/courses/view.php';
+    }
+
+    private function handleAddDocument() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $title = trim($_POST['title'] ?? '');
+        if (empty($title)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&error=" . urlencode("Document title is required."));
+            exit;
+        }
+
+        $filePath = '';
+        $fileName = '';
+        $fileType = 'pdf';
+
+        if (isset($_FILES['doc_file']) && $_FILES['doc_file']['error'] === UPLOAD_ERR_OK) {
+            $fileTmpPath = $_FILES['doc_file']['tmp_name'];
+            $fileName = $_FILES['doc_file']['name'];
+            $fileType = pathinfo($fileName, PATHINFO_EXTENSION);
+            
+            $uploadDir = __DIR__ . '/../../uploads/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $cleanName = preg_replace("/[^A-Za-z0-9._-]/", "_", basename($fileName));
+            $uniqueName = time() . '_' . $cleanName;
+            if (move_uploaded_file($fileTmpPath, $uploadDir . $uniqueName)) {
+                $filePath = 'uploads/' . $uniqueName;
+            } else {
+                header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&error=" . urlencode("Failed to save uploaded file."));
+                exit;
+            }
+        } elseif (!empty($_POST['file_name_text'])) {
+            $fileName = trim($_POST['file_name_text']);
+            $fileType = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'pdf';
+            
+            $uploadDir = __DIR__ . '/../../uploads/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            $cleanName = preg_replace("/[^A-Za-z0-9._-]/", "_", basename($fileName));
+            $uniqueName = time() . '_' . $cleanName;
+            
+            file_put_contents($uploadDir . $uniqueName, "Mock document content for " . $title);
+            $filePath = 'uploads/' . $uniqueName;
+        } else {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&error=" . urlencode("Please upload a file or provide a mock file name."));
+            exit;
+        }
+
+        $this->documentModel->create([
+            'course_id' => $courseId,
+            'title' => $title,
+            'file_path' => $filePath,
+            'file_type' => $fileType,
+            'description' => ''
+        ]);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&success=" . urlencode("Document uploaded successfully."));
+        exit;
+    }
+
+    private function handleDeleteDocument() {
+        $id = (int)($_GET['id'] ?? 0);
+        $doc = $this->documentModel->find($id);
+        if (!$doc) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Document not found."));
+            exit;
+        }
+
+        $courseId = $doc['course_id'];
+        $course = $this->courseModel->find($courseId);
+        if ($course) {
+            $this->requireCourseOwnershipOrAdmin($course);
+        }
+
+        if ($this->documentModel->delete($id)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&success=" . urlencode("Document deleted successfully."));
+        } else {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=documents&error=" . urlencode("Failed to delete document."));
+        }
+        exit;
+    }
+
+    private function handleAddLink() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $title = trim($_POST['title'] ?? '');
+        $url = trim($_POST['url'] ?? '');
+
+        if (empty($title) || empty($url)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=links&error=" . urlencode("Title and URL are required."));
+            exit;
+        }
+
+        $this->linkModel->create([
+            'course_id' => $courseId,
+            'title' => $title,
+            'url' => $url,
+            'status' => 'published'
+        ]);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=links&success=" . urlencode("Link added successfully."));
+        exit;
+    }
+
+    private function handleDeleteLink() {
+        $id = (int)($_GET['id'] ?? 0);
+        $lnk = $this->linkModel->getById($id);
+        if (!$lnk) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Link not found."));
+            exit;
+        }
+
+        $courseId = $lnk['course_id'];
+        $course = $this->courseModel->find($courseId);
+        if ($course) {
+            $this->requireCourseOwnershipOrAdmin($course);
+        }
+
+        if ($this->linkModel->delete($id)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=links&success=" . urlencode("Link deleted successfully."));
+        } else {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=links&error=" . urlencode("Failed to delete link."));
+        }
+        exit;
+    }
+
+    private function handleAddExamToCourse() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $examId = (int)($_POST['exam_id'] ?? 0);
+
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare("UPDATE exams SET course_id = ? WHERE id = ?");
+        $stmt->execute([$courseId, $examId]);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=quizzes&success=" . urlencode("Quiz linked successfully."));
+        exit;
+    }
+
+    private function handleUnlinkExam() {
+        $courseId = (int)($_GET['course_id'] ?? 0);
+        $examId = (int)($_GET['exam_id'] ?? 0);
+
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare("UPDATE exams SET course_id = NULL WHERE id = ? AND course_id = ?");
+        $stmt->execute([$examId, $courseId]);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=quizzes&success=" . urlencode("Quiz unlinked successfully."));
+        exit;
+    }
+
+    private function handleAddLPItem() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $type = trim($_POST['type'] ?? '');
+        $itemId = (int)($_POST['item_id'] ?? 0);
+        $prerequisiteId = !empty($_POST['prerequisite_id']) ? (int)$_POST['prerequisite_id'] : null;
+
+        if (empty($type) || empty($itemId)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=learning-path&error=" . urlencode("Type and Item are required."));
+            exit;
+        }
+
+        $db = Database::getInstance()->getConnection();
+        $stmt = $db->prepare("SELECT MAX(order_index) FROM learning_path_items WHERE course_id = ?");
+        $stmt->execute([$courseId]);
+        $maxOrder = $stmt->fetchColumn();
+        $nextOrder = ($maxOrder !== false) ? (int)$maxOrder + 1 : 1;
+
+        $this->lpModel->addItem([
+            'course_id' => $courseId,
+            'type' => $type,
+            'item_id' => $itemId,
+            'prerequisite_id' => $prerequisiteId,
+            'order_index' => $nextOrder
+        ]);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=learning-path&success=" . urlencode("Item added to learning path."));
+        exit;
+    }
+
+    private function handleDeleteLPItem() {
+        $id = (int)($_GET['id'] ?? 0);
+        $item = $this->lpModel->getItemById($id);
+        if (!$item) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Learning path item not found."));
+            exit;
+        }
+
+        $courseId = $item['course_id'];
+        $course = $this->courseModel->find($courseId);
+        if ($course) {
+            $this->requireCourseOwnershipOrAdmin($course);
+        }
+
+        $this->lpModel->deleteItem($id);
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=learning-path&success=" . urlencode("Item removed from learning path."));
+        exit;
+    }
+
+    private function handleUpdateLPPrereq() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $lpItemId = (int)($_POST['lp_item_id'] ?? 0);
+        $prerequisiteId = !empty($_POST['prerequisite_id']) ? (int)$_POST['prerequisite_id'] : null;
+
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        $item = $this->lpModel->getItemById($lpItemId);
+        if ($item) {
+            $this->lpModel->updateItem($lpItemId, [
+                'prerequisite_id' => $prerequisiteId,
+                'order_index' => $item['order_index']
+            ]);
+        }
+
+        header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=learning-path&success=" . urlencode("Prerequisite updated."));
+        exit;
+    }
+
+    private function handleUpdateLPOrders() {
+        header('Content-Type: application/json');
+        
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            echo json_encode(['status' => 'error', 'message' => 'CSRF token invalid.']);
+            exit;
+        }
+
+        $orders = $_POST['orders'] ?? [];
+        if (empty($orders) || !is_array($orders)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid orders parameter.']);
+            exit;
+        }
+
+        $db = Database::getInstance()->getConnection();
+        try {
+            $db->beginTransaction();
+            $stmt = $db->prepare("UPDATE learning_path_items SET order_index = ? WHERE id = ?");
+            foreach ($orders as $id => $order) {
+                $stmt->execute([intval($order), intval($id)]);
+            }
+            $db->commit();
+            echo json_encode(['status' => 'success']);
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    private function handleEnrollStudent() {
+        $token = $_POST['csrf_token'] ?? '';
+        if (!Session::validateCSRF($token)) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
+            exit;
+        }
+
+        $courseId = (int)($_POST['course_id'] ?? 0);
+        $studentId = (int)($_POST['student_id'] ?? 0);
+
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        if ($this->courseModel->enrollStudent($courseId, $studentId)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=enrollments&success=" . urlencode("Student enrolled successfully."));
+        } else {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=enrollments&error=" . urlencode("Failed to enroll student. It is possible they are already enrolled."));
+        }
+        exit;
+    }
+
+    private function handleUnenrollStudent() {
+        $courseId = (int)($_GET['course_id'] ?? 0);
+        $studentId = (int)($_GET['student_id'] ?? 0);
+
+        $course = $this->courseModel->find($courseId);
+        if (!$course) {
+            header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Course not found."));
+            exit;
+        }
+        $this->requireCourseOwnershipOrAdmin($course);
+
+        if ($this->courseModel->unenrollStudent($courseId, $studentId)) {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=enrollments&success=" . urlencode("Student unenrolled successfully."));
+        } else {
+            header("Location: index.php?route=admin/courses&action=view&id={$courseId}&tab=enrollments&error=" . urlencode("Failed to unenroll student."));
+        }
+        exit;
     }
 
     /**

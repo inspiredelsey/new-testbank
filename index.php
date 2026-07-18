@@ -72,6 +72,13 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/documents':
+        require_once __DIR__ . '/testbank/admin/controllers/DocumentController.php';
+        $controller = new DocumentController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/categories':
         require_once __DIR__ . '/testbank/admin/controllers/CategoryController.php';
         $controller = new CategoryController();
