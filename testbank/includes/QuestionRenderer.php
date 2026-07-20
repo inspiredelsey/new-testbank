@@ -308,16 +308,178 @@ class QuestionRenderer {
                 $html .= "    </div>";
                 break;
 
-            // Extensible hooks for the remaining NGN types
-            case 'mcq_extended':
             case 'bowtie':
+                $leftOptions = $qData['left_options'] ?? [];
+                $centerOptions = $qData['center_options'] ?? [];
+                $rightOptions = $qData['right_options'] ?? [];
+                
+                $leftTarget = $qData['left_target_count'] ?? 1;
+                $centerTarget = $qData['center_target_count'] ?? 1;
+                $rightTarget = $qData['right_target_count'] ?? 1;
+                
+                $correct = $qData['correct'] ?? [];
+                $correctLeft = $correct['left'] ?? [];
+                $correctCenter = $correct['center'] ?? [];
+                $correctRight = $correct['right'] ?? [];
+
+                $html .= "    <div class='row g-3 font-sans'>";
+                
+                // LEFT COLUMN
+                $html .= "      <div class='col-md-4'>";
+                $html .= "        <div class='p-3 border rounded-3 bg-light h-100 d-flex flex-column'>";
+                $html .= "          <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "            <h6 class='fw-bold mb-0 text-dark'>Actions to Take</h6>";
+                $html .= "            <span class='badge bg-secondary-subtle text-secondary border px-2.5 py-1' style='font-size: 0.75rem;'>Select " . htmlspecialchars($leftTarget) . "</span>";
+                $html .= "          </div>";
+                $html .= "          <hr class='my-2 opacity-50'>";
+                $html .= "          <div class='d-flex flex-column gap-2 mt-1'>";
+                foreach ($leftOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $optText = $opt['text'] ?? '';
+                    $isCorrect = in_array($optId, $correctLeft);
+                    
+                    if ($isCorrect) {
+                        $html .= "        <div class='p-2.5 border border-success bg-success-subtle text-success-emphasis rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem;'>";
+                        $html .= "          <i data-lucide='check-circle-2' class='text-success mt-0.5 flex-shrink-0' style='width: 15px; height: 15px;'></i>";
+                        $html .= "          <span class='fw-medium'>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    } else {
+                        $html .= "        <div class='p-2.5 border bg-white text-muted rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem; border-style: dashed;'>";
+                        $html .= "          <span style='width: 15px;' class='flex-shrink-0'></span>";
+                        $html .= "          <span>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    }
+                }
+                $html .= "          </div>";
+                $html .= "        </div>";
+                $html .= "      </div>";
+
+                // CENTER COLUMN
+                $html .= "      <div class='col-md-4'>";
+                $html .= "        <div class='p-3 border border-primary border-opacity-25 rounded-3 bg-light h-100 d-flex flex-column' style='background-color: #f8fafc;'>";
+                $html .= "          <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "            <h6 class='fw-bold mb-0 text-primary'>Condition Most Likely</h6>";
+                $html .= "            <span class='badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1' style='font-size: 0.75rem;'>Select " . htmlspecialchars($centerTarget) . "</span>";
+                $html .= "          </div>";
+                $html .= "          <hr class='my-2 opacity-50'>";
+                $html .= "          <div class='d-flex flex-column gap-2 mt-1'>";
+                foreach ($centerOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $optText = $opt['text'] ?? '';
+                    $isCorrect = in_array($optId, $correctCenter);
+                    
+                    if ($isCorrect) {
+                        $html .= "        <div class='p-2.5 border border-success bg-success-subtle text-success-emphasis rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem;'>";
+                        $html .= "          <i data-lucide='check-circle-2' class='text-success mt-0.5 flex-shrink-0' style='width: 15px; height: 15px;'></i>";
+                        $html .= "          <span class='fw-medium'>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    } else {
+                        $html .= "        <div class='p-2.5 border bg-white text-muted rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem; border-style: dashed;'>";
+                        $html .= "          <span style='width: 15px;' class='flex-shrink-0'></span>";
+                        $html .= "          <span>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    }
+                }
+                $html .= "          </div>";
+                $html .= "        </div>";
+                $html .= "      </div>";
+
+                // RIGHT COLUMN
+                $html .= "      <div class='col-md-4'>";
+                $html .= "        <div class='p-3 border rounded-3 bg-light h-100 d-flex flex-column'>";
+                $html .= "          <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "            <h6 class='fw-bold mb-0 text-dark'>Parameters to Monitor</h6>";
+                $html .= "            <span class='badge bg-secondary-subtle text-secondary border px-2.5 py-1' style='font-size: 0.75rem;'>Select " . htmlspecialchars($rightTarget) . "</span>";
+                $html .= "          </div>";
+                $html .= "          <hr class='my-2 opacity-50'>";
+                $html .= "          <div class='d-flex flex-column gap-2 mt-1'>";
+                foreach ($rightOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $optText = $opt['text'] ?? '';
+                    $isCorrect = in_array($optId, $correctRight);
+                    
+                    if ($isCorrect) {
+                        $html .= "        <div class='p-2.5 border border-success bg-success-subtle text-success-emphasis rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem;'>";
+                        $html .= "          <i data-lucide='check-circle-2' class='text-success mt-0.5 flex-shrink-0' style='width: 15px; height: 15px;'></i>";
+                        $html .= "          <span class='fw-medium'>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    } else {
+                        $html .= "        <div class='p-2.5 border bg-white text-muted rounded-2 d-flex align-items-start gap-2' style='font-size: 0.9rem; border-style: dashed;'>";
+                        $html .= "          <span style='width: 15px;' class='flex-shrink-0'></span>";
+                        $html .= "          <span>" . htmlspecialchars($optText) . "</span>";
+                        $html .= "        </div>";
+                    }
+                }
+                $html .= "          </div>";
+                $html .= "        </div>";
+                $html .= "      </div>";
+
+                $html .= "    </div>";
+                break;
+
+            case 'mcq_extended':
+                $opts = $qData['options'] ?? [];
+                $selectCount = $qData['select_count'] ?? 1;
+                $html .= "    <div class='alert bg-primary-subtle text-primary border border-primary-subtle rounded-3 d-flex align-items-center gap-2 mb-3 py-2 px-3 font-sans'>";
+                $html .= "      <i data-lucide='info' size='16'></i>";
+                $html .= "      <span class='small fw-semibold'>Rule: Must select exactly " . htmlspecialchars($selectCount) . " options</span>";
+                $html .= "    </div>";
+                $html .= "    <div class='d-flex flex-column gap-2'>";
+                foreach ($opts as $idx => $opt) {
+                    $isCorrect = !empty($opt['is_correct']);
+                    $bgClass = $isCorrect ? 'bg-success-subtle border-success-subtle text-success-emphasis' : 'bg-light border-light-subtle text-dark';
+                    $icon = $isCorrect ? '<i data-lucide="check-circle" class="text-success" size="18"></i>' : '<i data-lucide="circle" class="text-muted" size="18"></i>';
+                    
+                    $html .= "      <div class='p-3 rounded-3 border d-flex align-items-center justify-content-between gap-3 " . $bgClass . "'>";
+                    $html .= "        <div class='d-flex align-items-center gap-3'>";
+                    $html .= "          <input class='form-check-input mt-0' type='checkbox' disabled " . ($isCorrect ? 'checked' : '') . " style='pointer-events: none;'>";
+                    $html .= "          <span class='font-sans'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "        </div>";
+                    $html .= "        <div>" . $icon . "</div>";
+                    $html .= "      </div>";
+                }
+                $html .= "    </div>";
+                break;
+
             case 'fill_blank_calc':
+                $correctValue = $qData['correct_value'] ?? '';
+                $tolerance = $qData['tolerance'] ?? 0;
+                $unit = $qData['unit'] ?? '';
+                
+                $html .= "    <div class='p-4 border rounded-3 bg-light font-sans d-flex flex-column gap-3' style='max-width: 500px;'>";
+                $html .= "      <div class='d-flex align-items-center gap-2 mb-1'>";
+                $html .= "        <i data-lucide='calculator' class='text-primary' size='20'></i>";
+                $html .= "        <h6 class='fw-bold mb-0 text-dark'>Calculation Answer Key</h6>";
+                $html .= "      </div>";
+                $html .= "      <div class='row g-3'>";
+                $html .= "        <div class='col-sm-6'>";
+                $html .= "          <label class='form-label small text-muted fw-semibold mb-1'>Correct Value</label>";
+                $html .= "          <div class='fs-5 fw-bold text-success'>" . htmlspecialchars($correctValue) . (!empty($unit) ? " " . htmlspecialchars($unit) : "") . "</div>";
+                $html .= "        </div>";
+                $html .= "        <div class='col-sm-6'>";
+                $html .= "          <label class='form-label small text-muted fw-semibold mb-1'>Tolerance Range</label>";
+                $html .= "          <div class='fs-6 text-dark fw-medium'>&plusmn; " . htmlspecialchars($tolerance) . "</div>";
+                $html .= "          <span class='text-muted small'>[" . (floatval($correctValue) - floatval($tolerance)) . " &mdash; " . (floatval($correctValue) + floatval($tolerance)) . "]</span>";
+                $html .= "        </div>";
+                $html .= "      </div>";
+                $html .= "      <div class='mt-2 pt-3 border-top'>";
+                $html .= "        <label class='form-label small text-muted fw-semibold mb-1'>Student Input Mockup</label>";
+                $html .= "        <div class='input-group' style='max-width: 250px;'>";
+                $html .= "          <input type='text' class='form-control bg-white' placeholder='Enter value...' disabled style='pointer-events: none;'>";
+                if (!empty($unit)) {
+                    $html .= "      <span class='input-group-text bg-light text-muted fw-medium'>" . htmlspecialchars($unit) . "</span>";
+                }
+                $html .= "        </div>";
+                $html .= "      </div>";
+                $html .= "    </div>";
+                break;
+
             case 'essay':
-                $html .= "    <div class='alert alert-warning border-0 rounded-3 d-flex align-items-center gap-2 mb-0'>";
-                $html .= "      <i data-lucide='clock' size='18'></i>";
+                $html .= "    <div class='p-3 border rounded-3 bg-light font-sans d-flex align-items-start gap-2'>";
+                $html .= "      <i data-lucide='file-text' class='text-warning mt-0.5' size='18'></i>";
                 $html .= "      <div>";
-                $html .= "        <strong>" . self::getTypeLabel($type) . " Preview Placeholder</strong><br>";
-                $html .= "        <small class='text-muted'>This is one of the advanced NGN question types coming soon in future updates.</small>";
+                $html .= "        <span class='fw-semibold text-dark d-block mb-1'>Essay Response Required</span>";
+                $html .= "        <span class='text-muted small'>This is a free-text response. There is no predefined correct answer key. Instructors will grade student submissions manually from the grading queue.</span>";
                 $html .= "      </div>";
                 $html .= "    </div>";
                 break;

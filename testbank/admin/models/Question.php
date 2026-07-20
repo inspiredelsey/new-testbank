@@ -387,6 +387,113 @@ class Question {
                     throw new Exception("Correct segment ID '" . $cId . "' does not reference a valid segment.");
                 }
             }
+        } elseif ($type === 'bowtie') {
+            // Bowtie questions should support partial credit scoring (scoring_method = 'partial_credit'):
+            // award points proportionally per correct selection across all three sides combined,
+            // since getting 1 of 2 correct actions right is meaningfully different from getting 0 right.
+            
+            foreach (['left', 'center', 'right'] as $side) {
+                $optsKey = $side . '_options';
+                $targetKey = $side . '_target_count';
+                
+                if (!isset($data[$optsKey]) || !is_array($data[$optsKey]) || empty($data[$optsKey])) {
+                    throw new Exception(ucfirst($side) . " side options are required and must be a non-empty array.");
+                }
+                
+                if (!isset($data[$targetKey]) || !is_numeric($data[$targetKey]) || intval($data[$targetKey]) <= 0) {
+                    throw new Exception(ucfirst($side) . " side target count must be a positive integer.");
+                }
+                
+                $targetCount = intval($data[$targetKey]);
+                $optionsCount = count($data[$optsKey]);
+                if ($targetCount > $optionsCount) {
+                    throw new Exception(ucfirst($side) . " side target count ($targetCount) cannot exceed the number of available options ($optionsCount).");
+                }
+                
+                $sideIds = [];
+                foreach ($data[$optsKey] as $idx => $opt) {
+                    if (!isset($opt['id']) || trim($opt['id']) === '') {
+                        throw new Exception(ucfirst($side) . " side option #" . ($idx + 1) . " is missing an ID.");
+                    }
+                    if (!isset($opt['text']) || trim($opt['text']) === '') {
+                        throw new Exception(ucfirst($side) . " side option #" . ($idx + 1) . " is missing text.");
+                    }
+                    $optId = trim($opt['id']);
+                    if (in_array($optId, $sideIds)) {
+                        throw new Exception("Duplicate ID in " . $side . " side options: " . $optId);
+                    }
+                    $sideIds[] = $optId;
+                }
+                
+                if (!isset($data['correct']) || !is_array($data['correct']) || !isset($data['correct'][$side]) || !is_array($data['correct'][$side])) {
+                    throw new Exception("Correct selections for " . $side . " side are missing.");
+                }
+                
+                $correctIds = $data['correct'][$side];
+                if (count($correctIds) !== $targetCount) {
+                    throw new Exception(ucfirst($side) . " side requires exactly " . $targetCount . " correct answers, but " . count($correctIds) . " were selected.");
+                }
+                
+                $seenCorrect = [];
+                foreach ($correctIds as $cId) {
+                    if (!in_array($cId, $sideIds)) {
+                        throw new Exception("Correct " . $side . " side option ID '$cId' does not exist in its option pool.");
+                    }
+                    if (in_array($cId, $seenCorrect)) {
+                        throw new Exception("Duplicate correct selection ID '$cId' in " . $side . " side.");
+                    }
+                    $seenCorrect[] = $cId;
+                }
+            }
+        } elseif ($type === 'mcq_extended') {
+            // MCQ Extended requires a specific number of selections (select_count).
+            // Design decision: We require that the number of options marked with is_correct=true
+            // must exactly match select_count to avoid grading ambiguity in later phases.
+            // Support partial credit scoring (scoring_method = 'partial_credit'): award points
+            // proportionally per correct selection.
+            if (!isset($data['options']) || !is_array($data['options']) || empty($data['options'])) {
+                throw new Exception("Options are required and must be a non-empty array.");
+            }
+            if (!isset($data['select_count']) || !is_numeric($data['select_count']) || intval($data['select_count']) < 1) {
+                throw new Exception("Select count must be a positive integer.");
+            }
+            $selectCount = intval($data['select_count']);
+            $totalOptions = count($data['options']);
+            if ($selectCount >= $totalOptions) {
+                throw new Exception("Select count must be less than the total number of options.");
+            }
+            $correctCount = 0;
+            $optionIds = [];
+            foreach ($data['options'] as $idx => $opt) {
+                if (!isset($opt['id']) || trim($opt['id']) === '') {
+                    throw new Exception("Option #" . ($idx + 1) . " is missing an ID.");
+                }
+                if (!isset($opt['text']) || trim($opt['text']) === '') {
+                    throw new Exception("Option #" . ($idx + 1) . " is missing text.");
+                }
+                $optId = trim($opt['id']);
+                if (in_array($optId, $optionIds)) {
+                    throw new Exception("Duplicate option ID: " . $optId);
+                }
+                $optionIds[] = $optId;
+                if (!empty($opt['is_correct'])) {
+                    $correctCount++;
+                }
+            }
+            if ($correctCount !== $selectCount) {
+                throw new Exception("Number of correct options ($correctCount) must exactly match select_count ($selectCount).");
+            }
+        } elseif ($type === 'fill_blank_calc') {
+            // Fill blank calc: numeric calculation answer.
+            if (!isset($data['correct_value']) || $data['correct_value'] === '' || !is_numeric($data['correct_value'])) {
+                throw new Exception("Correct value is required and must be a numeric value.");
+            }
+            if (!isset($data['tolerance']) || $data['tolerance'] === '' || !is_numeric($data['tolerance']) || floatval($data['tolerance']) < 0) {
+                throw new Exception("Tolerance is required and must be a non-negative number.");
+            }
+        } elseif ($type === 'essay') {
+            // Essay response: manually graded by an instructor.
+            // No custom schema validation is needed for question_data.
         }
 
         return true;

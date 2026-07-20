@@ -535,6 +535,155 @@ class QuestionController {
                 'segments' => $segments,
                 'correct_segment_ids' => $correctSegmentIds
             ];
+        } elseif ($type === 'bowtie') {
+            $leftTexts = $_POST['bowtie_left_text'] ?? [];
+            $leftCorrectInput = $_POST['bowtie_left_correct'] ?? [];
+            $leftTargetCount = isset($_POST['bowtie_left_target_count']) ? intval($_POST['bowtie_left_target_count']) : 0;
+
+            $centerTexts = $_POST['bowtie_center_text'] ?? [];
+            $centerCorrectInput = $_POST['bowtie_center_correct'] ?? [];
+            $centerTargetCount = isset($_POST['bowtie_center_target_count']) ? intval($_POST['bowtie_center_target_count']) : 0;
+
+            $rightTexts = $_POST['bowtie_right_text'] ?? [];
+            $rightCorrectInput = $_POST['bowtie_right_correct'] ?? [];
+            $rightTargetCount = isset($_POST['bowtie_right_target_count']) ? intval($_POST['bowtie_right_target_count']) : 0;
+
+            $leftOptions = [];
+            $correctLeft = [];
+            $lCount = 1;
+            foreach ($leftTexts as $originalIndex => $text) {
+                $text = trim($text);
+                if ($text === '') continue;
+                $optId = 'la' . $lCount;
+                $leftOptions[] = [
+                    'id' => $optId,
+                    'text' => $text
+                ];
+                if (in_array((string)$originalIndex, $leftCorrectInput) || in_array($originalIndex, $leftCorrectInput)) {
+                    $correctLeft[] = $optId;
+                }
+                $lCount++;
+            }
+
+            $centerOptions = [];
+            $correctCenter = [];
+            $cCount = 1;
+            foreach ($centerTexts as $originalIndex => $text) {
+                $text = trim($text);
+                if ($text === '') continue;
+                $optId = 'ca' . $cCount;
+                $centerOptions[] = [
+                    'id' => $optId,
+                    'text' => $text
+                ];
+                if (in_array((string)$originalIndex, $centerCorrectInput) || in_array($originalIndex, $centerCorrectInput)) {
+                    $correctCenter[] = $optId;
+                }
+                $cCount++;
+            }
+
+            $rightOptions = [];
+            $correctRight = [];
+            $rCount = 1;
+            foreach ($rightTexts as $originalIndex => $text) {
+                $text = trim($text);
+                if ($text === '') continue;
+                $optId = 'ra' . $rCount;
+                $rightOptions[] = [
+                    'id' => $optId,
+                    'text' => $text
+                ];
+                if (in_array((string)$originalIndex, $rightCorrectInput) || in_array($originalIndex, $rightCorrectInput)) {
+                    $correctRight[] = $optId;
+                }
+                $rCount++;
+            }
+
+            if (count($leftOptions) < $leftTargetCount) {
+                throw new Exception("Left side (Actions to Take) has only " . count($leftOptions) . " options, but target count is set to $leftTargetCount. You must add more options or reduce the target count.");
+            }
+            if (count($correctLeft) !== $leftTargetCount) {
+                throw new Exception("Left side (Actions to Take) requires exactly $leftTargetCount correct answers, but " . count($correctLeft) . " were selected.");
+            }
+
+            if (count($centerOptions) < $centerTargetCount) {
+                throw new Exception("Center side (Condition Most Likely) has only " . count($centerOptions) . " options, but target count is set to $centerTargetCount. You must add more options or reduce the target count.");
+            }
+            if (count($correctCenter) !== $centerTargetCount) {
+                throw new Exception("Center side (Condition Most Likely) requires exactly $centerTargetCount correct answers, but " . count($correctCenter) . " were selected.");
+            }
+
+            if (count($rightOptions) < $rightTargetCount) {
+                throw new Exception("Right side (Parameters to Monitor) has only " . count($rightOptions) . " options, but target count is set to $rightTargetCount. You must add more options or reduce the target count.");
+            }
+            if (count($correctRight) !== $rightTargetCount) {
+                throw new Exception("Right side (Parameters to Monitor) requires exactly $rightTargetCount correct answers, but " . count($correctRight) . " were selected.");
+            }
+
+            return [
+                'left_options' => $leftOptions,
+                'center_options' => $centerOptions,
+                'right_options' => $rightOptions,
+                'left_target_count' => $leftTargetCount,
+                'center_target_count' => $centerTargetCount,
+                'right_target_count' => $rightTargetCount,
+                'correct' => [
+                    'left' => $correctLeft,
+                    'center' => $correctCenter,
+                    'right' => $correctRight
+                ]
+            ];
+        } elseif ($type === 'mcq_extended') {
+            $optionsInput = $_POST['options'] ?? [];
+            $selectCount = isset($_POST['select_count']) ? intval($_POST['select_count']) : 1;
+            $options = [];
+            
+            foreach ($optionsInput as $idx => $optText) {
+                $optText = trim($optText);
+                if ($optText === '') continue;
+
+                $isCorrect = (isset($_POST['correct_options']) && is_array($_POST['correct_options']) && in_array($idx, $_POST['correct_options']));
+
+                $options[] = [
+                    'id' => 'o' . ($idx + 1),
+                    'text' => $optText,
+                    'is_correct' => $isCorrect
+                ];
+            }
+            
+            $correctCount = 0;
+            foreach ($options as $opt) {
+                if ($opt['is_correct']) {
+                    $correctCount++;
+                }
+            }
+            if ($correctCount !== $selectCount) {
+                throw new Exception("Rule Violation: MCQ Extended requires exactly $selectCount correct answers, but $correctCount were marked correct.");
+            }
+            
+            return [
+                'options' => $options,
+                'select_count' => $selectCount
+            ];
+        } elseif ($type === 'fill_blank_calc') {
+            $correctValue = isset($_POST['fill_blank_calc_correct_value']) ? $_POST['fill_blank_calc_correct_value'] : '';
+            $tolerance = isset($_POST['fill_blank_calc_tolerance']) ? $_POST['fill_blank_calc_tolerance'] : '';
+            $unit = isset($_POST['fill_blank_calc_unit']) ? trim($_POST['fill_blank_calc_unit']) : '';
+
+            if ($correctValue === '' || !is_numeric($correctValue)) {
+                throw new Exception("Error: Correct value is required and must be a valid number.");
+            }
+            if ($tolerance === '' || !is_numeric($tolerance) || floatval($tolerance) < 0) {
+                throw new Exception("Error: Tolerance range is required and must be a non-negative number.");
+            }
+
+            return [
+                'correct_value' => floatval($correctValue),
+                'tolerance' => floatval($tolerance),
+                'unit' => $unit
+            ];
+        } elseif ($type === 'essay') {
+            return [];
         }
 
         // Default or unhandled type fallback

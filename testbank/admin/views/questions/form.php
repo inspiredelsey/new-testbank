@@ -81,12 +81,10 @@ foreach ($correctPairs as $p) {
                                     <option value="cloze_dragdrop" <?php echo ($type === 'cloze_dragdrop') ? 'selected' : ''; ?>>Cloze Drag and Drop</option>
                                     <option value="drag_drop_ordered" <?php echo ($type === 'drag_drop_ordered') ? 'selected' : ''; ?>>Drag and Drop Ordered</option>
                                     <option value="highlight" <?php echo ($type === 'highlight') ? 'selected' : ''; ?>>Highlight Select</option>
-                                </optgroup>
-                                <optgroup label="Coming Soon (NGN Complex Types)" disabled>
-                                    <option value="mcq_extended">Extended MCQ (coming soon)</option>
-                                    <option value="bowtie">Bowtie Scenario (coming soon)</option>
-                                    <option value="fill_blank_calc">Calculated Fill Blank (coming soon)</option>
-                                    <option value="essay">Essay Response (coming soon)</option>
+                                    <option value="bowtie" <?php echo ($type === 'bowtie') ? 'selected' : ''; ?>>Bowtie Scenario</option>
+                                    <option value="mcq_extended" <?php echo ($type === 'mcq_extended') ? 'selected' : ''; ?>>Extended MCQ (Select N)</option>
+                                    <option value="fill_blank_calc" <?php echo ($type === 'fill_blank_calc') ? 'selected' : ''; ?>>Calculated Fill Blank</option>
+                                    <option value="essay" <?php echo ($type === 'essay') ? 'selected' : ''; ?>>Essay Response</option>
                                 </optgroup>
                             </select>
                         </div>
@@ -159,6 +157,11 @@ foreach ($correctPairs as $p) {
 
                         <!-- SUB FORM FOR MCQ & SATA -->
                         <div id="subFormMcq" class="type-sub-form">
+                            <div id="mcqExtendedSelectCountContainer" class="mb-3 d-none">
+                                <label for="select_count" class="form-label small fw-bold text-muted mb-1">Target Selection Count (N) <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control form-control-sm" style="max-width: 150px;" id="select_count" name="select_count" min="1" value="<?php echo htmlspecialchars($qData['select_count'] ?? '2'); ?>">
+                                <small class="text-muted d-block mt-1">Number of options the student must select (e.g., 2 or 3).</small>
+                            </div>
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="fw-bold mb-0 text-secondary">Response Options Configuration</h6>
                                 <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onclick="addMcqRow()">
@@ -167,6 +170,36 @@ foreach ($correctPairs as $p) {
                             </div>
                             <div class="d-flex flex-column gap-2" id="mcqRowsContainer">
                                 <!-- JS-Injected option lines go here -->
+                            </div>
+                        </div>
+
+                        <!-- SUB FORM FOR FILL BLANK CALC -->
+                        <div id="subFormFillBlankCalc" class="type-sub-form d-none">
+                            <h6 class="fw-bold mb-3 text-secondary">Calculated Fill-In-The-Blank Configuration</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="fill_blank_calc_correct_value" class="form-label small fw-bold text-muted mb-1">Correct Numeric Value <span class="text-danger">*</span></label>
+                                    <input type="number" step="any" class="form-control" id="fill_blank_calc_correct_value" name="fill_blank_calc_correct_value" placeholder="e.g. 12.5" value="<?php echo htmlspecialchars($qData['correct_value'] ?? ''); ?>">
+                                    <small class="text-muted d-block mt-1">The exact numerical answer expected from students.</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="fill_blank_calc_tolerance" class="form-label small fw-bold text-muted mb-1">Allowed Tolerance Range (&plusmn;) <span class="text-danger">*</span></label>
+                                    <input type="number" step="any" class="form-control" id="fill_blank_calc_tolerance" name="fill_blank_calc_tolerance" min="0" placeholder="e.g. 0.1" value="<?php echo htmlspecialchars($qData['tolerance'] ?? '0'); ?>">
+                                    <small class="text-muted d-block mt-1">Acceptable margin of error (0 for exact match).</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="fill_blank_calc_unit" class="form-label small fw-bold text-muted mb-1">Display Unit / Label</label>
+                                    <input type="text" class="form-control" id="fill_blank_calc_unit" name="fill_blank_calc_unit" placeholder="e.g. mg, mL, kg" value="<?php echo htmlspecialchars($qData['unit'] ?? ''); ?>">
+                                    <small class="text-muted d-block mt-1">Suffix label shown to the student (not graded).</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUB FORM FOR ESSAY -->
+                        <div id="subFormEssay" class="type-sub-form d-none">
+                            <div class="p-3 rounded-3 border bg-light d-flex align-items-center gap-2">
+                                <i data-lucide="info" class="text-warning" size="18"></i>
+                                <span class="small text-muted font-sans">Essay responses do not require any additional option setup. The student will be given a rich-text input box to write their response, which is graded manually by instructors from the grading queue.</span>
                             </div>
                         </div>
 
@@ -345,6 +378,77 @@ foreach ($correctPairs as $p) {
                             </div>
                         </div>
 
+                        <!-- SUB FORM FOR BOWTIE -->
+                        <div id="subFormBowtie" class="type-sub-form d-none">
+                            <div class="row g-4">
+                                <!-- LEFT SIDE: ACTIONS TO TAKE -->
+                                <div class="col-md-4">
+                                    <div class="card border border-light-subtle shadow-sm h-100">
+                                        <div class="card-header bg-light py-2 px-3 border-0 d-flex justify-content-between align-items-center">
+                                            <h6 class="fw-bold mb-0 text-secondary" style="font-size: 0.9rem;">1. Actions to Take</h6>
+                                            <button type="button" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" onclick="addBowtieLeftRow()">
+                                                <i data-lucide="plus" size="12"></i> Add Option
+                                            </button>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="mb-3">
+                                                <label for="bowtie_left_target_count" class="form-label small fw-bold text-muted mb-1">Target Selections <span class="text-danger">*</span></label>
+                                                <input type="number" class="form-control form-control-sm" id="bowtie_left_target_count" name="bowtie_left_target_count" min="1" value="2" required>
+                                                <small class="text-muted d-block mt-1">Number of options the student must select on this side.</small>
+                                            </div>
+                                            <div id="bowtieLeftContainer" class="d-flex flex-column gap-2">
+                                                <!-- Dynamic inputs go here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- CENTER SIDE: CONDITION MOST LIKELY -->
+                                <div class="col-md-4">
+                                    <div class="card border border-primary border-opacity-25 shadow-sm h-100" style="background-color: #f8fafc;">
+                                        <div class="card-header bg-primary-subtle py-2 px-3 border-0 d-flex justify-content-between align-items-center">
+                                            <h6 class="fw-bold mb-0 text-primary" style="font-size: 0.9rem;">2. Condition Most Likely</h6>
+                                            <button type="button" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" onclick="addBowtieCenterRow()">
+                                                <i data-lucide="plus" size="12"></i> Add Option
+                                            </button>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="mb-3">
+                                                <label for="bowtie_center_target_count" class="form-label small fw-bold text-muted mb-1">Target Selections <span class="text-danger">*</span></label>
+                                                <input type="number" class="form-control form-control-sm" id="bowtie_center_target_count" name="bowtie_center_target_count" min="1" value="1" required>
+                                                <small class="text-muted d-block mt-1">Typically 1.</small>
+                                            </div>
+                                            <div id="bowtieCenterContainer" class="d-flex flex-column gap-2">
+                                                <!-- Dynamic inputs go here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RIGHT SIDE: PARAMETERS TO MONITOR -->
+                                <div class="col-md-4">
+                                    <div class="card border border-light-subtle shadow-sm h-100">
+                                        <div class="card-header bg-light py-2 px-3 border-0 d-flex justify-content-between align-items-center">
+                                            <h6 class="fw-bold mb-0 text-secondary" style="font-size: 0.9rem;">3. Parameters to Monitor</h6>
+                                            <button type="button" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1" onclick="addBowtieRightRow()">
+                                                <i data-lucide="plus" size="12"></i> Add Option
+                                            </button>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="mb-3">
+                                                <label for="bowtie_right_target_count" class="form-label small fw-bold text-muted mb-1">Target Selections <span class="text-danger">*</span></label>
+                                                <input type="number" class="form-control form-control-sm" id="bowtie_right_target_count" name="bowtie_right_target_count" min="1" value="2" required>
+                                                <small class="text-muted d-block mt-1">Number of options the student must select on this side.</small>
+                                            </div>
+                                            <div id="bowtieRightContainer" class="d-flex flex-column gap-2">
+                                                <!-- Dynamic inputs go here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="border-top pt-4 mt-auto d-flex gap-2 justify-content-end">
                             <a href="index.php?route=admin/questions&action=list" class="btn btn-light border px-4">Cancel</a>
                             <button type="submit" class="btn btn-primary px-4 d-flex align-items-center gap-2">
@@ -373,13 +477,53 @@ function onTypeChanged() {
     // Hide all sub forms
     document.querySelectorAll('.type-sub-form').forEach(el => el.classList.add('d-none'));
 
-    if (selectedType === 'mcq_single' || selectedType === 'mcq_multi_sata') {
+    // Reset required attributes on conditionally visible inputs
+    const condFields = [
+        'select_count',
+        'fill_blank_calc_correct_value',
+        'fill_blank_calc_tolerance'
+    ];
+    condFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.required = false;
+    });
+
+    if (selectedType === 'mcq_single' || selectedType === 'mcq_multi_sata' || selectedType === 'mcq_extended') {
         document.getElementById('subFormMcq').classList.remove('d-none');
+        
+        const selectCountContainer = document.getElementById('mcqExtendedSelectCountContainer');
+        const selectCountInput = document.getElementById('select_count');
+        if (selectedType === 'mcq_extended') {
+            selectCountContainer.classList.remove('d-none');
+            selectCountInput.required = true;
+        } else {
+            selectCountContainer.classList.add('d-none');
+            selectCountInput.required = false;
+        }
+
+        // Adjust input types of existing rows to match type
+        const inputs = document.querySelectorAll('#mcqRowsContainer input[type="radio"], #mcqRowsContainer input[type="checkbox"]');
+        inputs.forEach(input => {
+            if (selectedType === 'mcq_single') {
+                input.type = 'radio';
+                input.name = 'correct_option';
+            } else {
+                input.type = 'checkbox';
+                input.name = 'correct_options[]';
+            }
+        });
+
         // Force rendering rows if empty
         if (document.getElementById('mcqRowsContainer').children.length === 0) {
             addMcqRow();
             addMcqRow();
         }
+    } else if (selectedType === 'fill_blank_calc') {
+        document.getElementById('subFormFillBlankCalc').classList.remove('d-none');
+        document.getElementById('fill_blank_calc_correct_value').required = true;
+        document.getElementById('fill_blank_calc_tolerance').required = true;
+    } else if (selectedType === 'essay') {
+        document.getElementById('subFormEssay').classList.remove('d-none');
     } else if (selectedType === 'true_false') {
         document.getElementById('subFormTrueFalse').classList.remove('d-none');
     } else if (selectedType === 'matching') {
@@ -413,6 +557,23 @@ function onTypeChanged() {
         document.getElementById('subFormHighlight').classList.remove('d-none');
         if (document.getElementById('highlightSegmentsContainer').children.length === 0) {
             addHighlightSegmentRow();
+        }
+    } else if (selectedType === 'bowtie') {
+        document.getElementById('subFormBowtie').classList.remove('d-none');
+        if (document.getElementById('bowtieLeftContainer').children.length === 0) {
+            addBowtieLeftRow();
+            addBowtieLeftRow();
+            addBowtieLeftRow();
+        }
+        if (document.getElementById('bowtieCenterContainer').children.length === 0) {
+            addBowtieCenterRow();
+            addBowtieCenterRow();
+            addBowtieCenterRow();
+        }
+        if (document.getElementById('bowtieRightContainer').children.length === 0) {
+            addBowtieRightRow();
+            addBowtieRightRow();
+            addBowtieRightRow();
         }
     }
 
@@ -843,6 +1004,85 @@ function removeHighlightSegmentRow(rowId) {
     document.getElementById(rowId).remove();
 }
 
+// Bowtie dynamic option rows
+let bowtieLeftCounter = 0;
+function addBowtieLeftRow(textValue = '', isCorrect = false) {
+    const container = document.getElementById('bowtieLeftContainer');
+    const uniqueId = `bowtie_left_row_${bowtieLeftCounter}`;
+    const div = document.createElement('div');
+    div.id = uniqueId;
+    div.className = 'd-flex align-items-center gap-2 border rounded p-2 bg-light';
+    div.innerHTML = `
+        <div class="form-check mb-0 flex-shrink-0">
+            <input class="form-check-input ms-0 mt-0 pointer-hand" type="checkbox" name="bowtie_left_correct[]" value="${bowtieLeftCounter}" id="correct_left_${bowtieLeftCounter}" ${isCorrect ? 'checked' : ''} style="transform: scale(1.15);">
+        </div>
+        <div class="flex-grow-1">
+            <input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark py-0" name="bowtie_left_text[${bowtieLeftCounter}]" value="${escapeHtml(textValue)}" placeholder="Action choice text..." required>
+        </div>
+        <button type="button" class="btn btn-link text-danger p-0 ms-auto flex-shrink-0 d-flex align-items-center" onclick="removeBowtieLeftRow('${uniqueId}')">
+            <i data-lucide="x" style="width: 15px; height: 15px;"></i>
+        </button>
+    `;
+    container.appendChild(div);
+    bowtieLeftCounter++;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+function removeBowtieLeftRow(rowId) {
+    document.getElementById(rowId).remove();
+}
+
+let bowtieCenterCounter = 0;
+function addBowtieCenterRow(textValue = '', isCorrect = false) {
+    const container = document.getElementById('bowtieCenterContainer');
+    const uniqueId = `bowtie_center_row_${bowtieCenterCounter}`;
+    const div = document.createElement('div');
+    div.id = uniqueId;
+    div.className = 'd-flex align-items-center gap-2 border rounded p-2 bg-light';
+    div.innerHTML = `
+        <div class="form-check mb-0 flex-shrink-0">
+            <input class="form-check-input ms-0 mt-0 pointer-hand" type="checkbox" name="bowtie_center_correct[]" value="${bowtieCenterCounter}" id="correct_center_${bowtieCenterCounter}" ${isCorrect ? 'checked' : ''} style="transform: scale(1.15);">
+        </div>
+        <div class="flex-grow-1">
+            <input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark py-0" name="bowtie_center_text[${bowtieCenterCounter}]" value="${escapeHtml(textValue)}" placeholder="Condition choice text..." required>
+        </div>
+        <button type="button" class="btn btn-link text-danger p-0 ms-auto flex-shrink-0 d-flex align-items-center" onclick="removeBowtieCenterRow('${uniqueId}')">
+            <i data-lucide="x" style="width: 15px; height: 15px;"></i>
+        </button>
+    `;
+    container.appendChild(div);
+    bowtieCenterCounter++;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+function removeBowtieCenterRow(rowId) {
+    document.getElementById(rowId).remove();
+}
+
+let bowtieRightCounter = 0;
+function addBowtieRightRow(textValue = '', isCorrect = false) {
+    const container = document.getElementById('bowtieRightContainer');
+    const uniqueId = `bowtie_right_row_${bowtieRightCounter}`;
+    const div = document.createElement('div');
+    div.id = uniqueId;
+    div.className = 'd-flex align-items-center gap-2 border rounded p-2 bg-light';
+    div.innerHTML = `
+        <div class="form-check mb-0 flex-shrink-0">
+            <input class="form-check-input ms-0 mt-0 pointer-hand" type="checkbox" name="bowtie_right_correct[]" value="${bowtieRightCounter}" id="correct_right_${bowtieRightCounter}" ${isCorrect ? 'checked' : ''} style="transform: scale(1.15);">
+        </div>
+        <div class="flex-grow-1">
+            <input type="text" class="form-control form-control-sm border-0 bg-transparent text-dark py-0" name="bowtie_right_text[${bowtieRightCounter}]" value="${escapeHtml(textValue)}" placeholder="Parameter choice text..." required>
+        </div>
+        <button type="button" class="btn btn-link text-danger p-0 ms-auto flex-shrink-0 d-flex align-items-center" onclick="removeBowtieRightRow('${uniqueId}')">
+            <i data-lucide="x" style="width: 15px; height: 15px;"></i>
+        </button>
+    `;
+    container.appendChild(div);
+    bowtieRightCounter++;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+function removeBowtieRightRow(rowId) {
+    document.getElementById(rowId).remove();
+}
+
 // Initial hydration on page load
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Prefill True / False radios
@@ -856,7 +1096,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // 2. Prefill MCQ options
-    else if ((initialType === 'mcq_single' || initialType === 'mcq_multi_sata') && initialOptions.length > 0) {
+    else if ((initialType === 'mcq_single' || initialType === 'mcq_multi_sata' || initialType === 'mcq_extended') && initialOptions.length > 0) {
         initialOptions.forEach(opt => {
             addMcqRow(opt.text, opt.is_correct);
         });
@@ -970,6 +1210,41 @@ document.addEventListener('DOMContentLoaded', () => {
         initialSegments.forEach(seg => {
             const isCorrect = initialCorrectSegmentIds.includes(seg.id);
             addHighlightSegmentRow(seg.text, isCorrect);
+        });
+    }
+    
+    // 8. Prefill Bowtie options
+    else if (initialType === 'bowtie' && <?php echo json_encode(!empty($qData['left_options'])); ?>) {
+        const leftOptions = <?php echo json_encode($qData['left_options'] ?? []); ?>;
+        const centerOptions = <?php echo json_encode($qData['center_options'] ?? []); ?>;
+        const rightOptions = <?php echo json_encode($qData['right_options'] ?? []); ?>;
+        
+        const leftTarget = <?php echo json_encode($qData['left_target_count'] ?? 2); ?>;
+        const centerTarget = <?php echo json_encode($qData['center_target_count'] ?? 1); ?>;
+        const rightTarget = <?php echo json_encode($qData['right_target_count'] ?? 2); ?>;
+        
+        const correct = <?php echo json_encode($qData['correct'] ?? []); ?>;
+        const correctLeft = correct.left || [];
+        const correctCenter = correct.center || [];
+        const correctRight = correct.right || [];
+        
+        document.getElementById('bowtie_left_target_count').value = leftTarget;
+        document.getElementById('bowtie_center_target_count').value = centerTarget;
+        document.getElementById('bowtie_right_target_count').value = rightTarget;
+        
+        leftOptions.forEach(opt => {
+            const isCorrect = correctLeft.includes(opt.id);
+            addBowtieLeftRow(opt.text, isCorrect);
+        });
+        
+        centerOptions.forEach(opt => {
+            const isCorrect = correctCenter.includes(opt.id);
+            addBowtieCenterRow(opt.text, isCorrect);
+        });
+        
+        rightOptions.forEach(opt => {
+            const isCorrect = correctRight.includes(opt.id);
+            addBowtieRightRow(opt.text, isCorrect);
         });
     }
 
@@ -1099,6 +1374,90 @@ document.getElementById('questionForm').addEventListener('submit', function(even
                 event.preventDefault();
                 return false;
             }
+        }
+    }
+
+    if (selectedType === 'bowtie') {
+        const leftTarget = parseInt(document.getElementById('bowtie_left_target_count').value, 10) || 0;
+        const leftChecked = document.querySelectorAll('#bowtieLeftContainer input[type="checkbox"]:checked').length;
+        if (leftChecked !== leftTarget) {
+            alert(`Error: Left side (Actions to Take) requires exactly ${leftTarget} correct answers, but ${leftChecked} were selected.`);
+            event.preventDefault();
+            return false;
+        }
+
+        const centerTarget = parseInt(document.getElementById('bowtie_center_target_count').value, 10) || 0;
+        const centerChecked = document.querySelectorAll('#bowtieCenterContainer input[type="checkbox"]:checked').length;
+        if (centerChecked !== centerTarget) {
+            alert(`Error: Center side (Condition Most Likely) requires exactly ${centerTarget} correct answers, but ${centerChecked} were selected.`);
+            event.preventDefault();
+            return false;
+        }
+
+        const rightTarget = parseInt(document.getElementById('bowtie_right_target_count').value, 10) || 0;
+        const rightChecked = document.querySelectorAll('#bowtieRightContainer input[type="checkbox"]:checked').length;
+        if (rightChecked !== rightTarget) {
+            alert(`Error: Right side (Parameters to Monitor) requires exactly ${rightTarget} correct answers, but ${rightChecked} were selected.`);
+            event.preventDefault();
+            return false;
+        }
+
+        // Also check if they filled in at least as many options as target counts
+        const leftOptionsText = Array.from(document.querySelectorAll('#bowtieLeftContainer input[type="text"]')).map(i => i.value.trim()).filter(Boolean);
+        if (leftOptionsText.length < leftTarget) {
+            alert(`Error: Left side has only ${leftOptionsText.length} valid option(s), but target selection count is ${leftTarget}. Please add more options.`);
+            event.preventDefault();
+            return false;
+        }
+
+        const centerOptionsText = Array.from(document.querySelectorAll('#bowtieCenterContainer input[type="text"]')).map(i => i.value.trim()).filter(Boolean);
+        if (centerOptionsText.length < centerTarget) {
+            alert(`Error: Center side has only ${centerOptionsText.length} valid option(s), but target selection count is ${centerTarget}. Please add more options.`);
+            event.preventDefault();
+            return false;
+        }
+
+        const rightOptionsText = Array.from(document.querySelectorAll('#bowtieRightContainer input[type="text"]')).map(i => i.value.trim()).filter(Boolean);
+        if (rightOptionsText.length < rightTarget) {
+            alert(`Error: Right side has only ${rightOptionsText.length} valid option(s), but target selection count is ${rightTarget}. Please add more options.`);
+            event.preventDefault();
+            return false;
+        }
+    }
+
+    if (selectedType === 'mcq_extended') {
+        const selectCount = parseInt(document.getElementById('select_count').value, 10) || 0;
+        const totalOptions = document.querySelectorAll('#mcqRowsContainer div').length;
+        if (selectCount < 1) {
+            alert("Error: Target selection count must be at least 1.");
+            event.preventDefault();
+            return false;
+        }
+        if (selectCount >= totalOptions) {
+            alert(`Error: Target selection count (${selectCount}) must be less than the total number of options (${totalOptions}).`);
+            event.preventDefault();
+            return false;
+        }
+        const correctChecked = document.querySelectorAll('#mcqRowsContainer input[type="checkbox"]:checked').length;
+        if (correctChecked !== selectCount) {
+            alert(`Error: You must mark exactly ${selectCount} options as correct, but ${correctChecked} are marked.`);
+            event.preventDefault();
+            return false;
+        }
+    }
+
+    if (selectedType === 'fill_blank_calc') {
+        const correctVal = document.getElementById('fill_blank_calc_correct_value').value;
+        const toleranceVal = document.getElementById('fill_blank_calc_tolerance').value;
+        if (correctVal === '' || isNaN(parseFloat(correctVal))) {
+            alert("Error: Correct numeric value is required and must be a valid number.");
+            event.preventDefault();
+            return false;
+        }
+        if (toleranceVal === '' || isNaN(parseFloat(toleranceVal)) || parseFloat(toleranceVal) < 0) {
+            alert("Error: Tolerance range is required and must be a non-negative number.");
+            event.preventDefault();
+            return false;
         }
     }
 });
