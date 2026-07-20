@@ -1,90 +1,104 @@
 <?php
-require_once __DIR__ . '/../../../includes/QuestionRenderer.php';
-
-$pageTitle = 'Exam Preview - ' . htmlspecialchars($exam['title']);
+/**
+ * Exam Resolved Question Set Preview View
+ */
+$pageTitle = 'Exam Preview Snapshot';
 include __DIR__ . '/../layout_header.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <div class="card border-0 shadow-sm bg-light-subtle">
-            <div class="card-body p-4 d-flex align-items-center justify-content-between">
-                <div>
-                    <h5 class="fw-bold mb-1 text-dark">Pre-Flight Student Preview</h5>
-                    <p class="text-muted mb-0">Review the fully assembled question set as a student would experience it. All dynamic rules have been processed and resolved for this snapshot.</p>
+<div class="mb-4">
+    <a href="index.php?route=admin/exams&action=build&id=<?php echo $exam['id']; ?>" class="text-decoration-none text-muted small d-inline-flex align-items-center gap-1 mb-2">
+        <i data-lucide="arrow-left" size="14"></i>
+        <span>Back to Exam Builder</span>
+    </a>
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <h1 class="h2 mb-1 display-font">Resolved Question Set Preview</h1>
+            <p class="text-muted mb-0">Validation snapshot for exam: <strong><?php echo htmlspecialchars($exam['title']); ?></strong></p>
+        </div>
+        <button class="btn btn-primary d-inline-flex align-items-center gap-2 px-3 py-2" onclick="window.location.reload();" id="btn-refresh-preview">
+            <i data-lucide="rotate-cw" size="18"></i>
+            <span>Generate New Snapshot</span>
+        </button>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Panel: Explanatory summary and metadata of this specific snapshot -->
+    <div class="col-lg-4 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-3 mb-4 sticky-top" style="top: 20px;" id="preview-summary-card">
+            <div class="card-header bg-white py-3 border-bottom">
+                <h5 class="card-title mb-0 d-flex align-items-center gap-2">
+                    <i data-lucide="info" class="text-primary" size="18"></i>
+                    <span>Snapshot Details</span>
+                </h5>
+            </div>
+            <div class="card-body p-3">
+                <div class="p-3 bg-light rounded-3 mb-3 border">
+                    <h6 class="fw-semibold text-dark font-sans small text-uppercase mb-2" style="font-size: 0.65rem;">Simulation Notice</h6>
+                    <p class="small text-muted mb-0" style="line-height: 1.4;">
+                        This preview runs a full resolution simulation of the exam rules in real time. 
+                        <strong>Refreshing this page</strong> will run the pull rules again, generating a fresh, randomized sequence from your question banks.
+                    </p>
                 </div>
-                <div class="d-flex gap-2">
-                    <a href="index.php?route=admin/exams&action=preview&id=<?php echo $exam['id']; ?>" class="btn btn-outline-info d-flex align-items-center gap-1">
-                        <i data-lucide="refresh-cw" size="16"></i> Regenerate Assembly
-                    </a>
-                    <a href="index.php?route=admin/exams" class="btn btn-outline-secondary d-flex align-items-center gap-1">
-                        <i data-lucide="arrow-left" size="16"></i> Back to Workspace
-                    </a>
-                </div>
+
+                <ul class="list-group list-group-flush small">
+                    <li class="list-group-item px-0 py-2.5 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Total Questions</span>
+                        <span class="fw-semibold text-dark"><?php echo count($resolvedQuestions); ?> items</span>
+                    </li>
+                    <li class="list-group-item px-0 py-2.5 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Pass Mark</span>
+                        <span class="fw-semibold text-dark"><?php echo floatval($exam['pass_percentage']); ?>%</span>
+                    </li>
+                    <li class="list-group-item px-0 py-2.5 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Duration Limit</span>
+                        <span class="fw-semibold text-dark"><?php echo intval($exam['duration_minutes']); ?> mins</span>
+                    </li>
+                </ul>
+
+                <?php if (!empty($exam['description'])): ?>
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="fw-semibold text-dark font-sans small text-uppercase mb-2" style="font-size: 0.65rem;">Student Instructions</h6>
+                        <div class="text-muted small italic" style="white-space: pre-wrap; line-height: 1.4;"><?php echo htmlspecialchars($exam['description']); ?></div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-9 col-lg-8">
+    <!-- Right Panel: Loop and render all resolved questions using QuestionRenderer -->
+    <div class="col-lg-8 col-xl-9">
         <?php if (empty($resolvedQuestions)): ?>
-            <div class="card border-0 shadow-sm text-center py-5">
-                <div class="card-body">
-                    <i data-lucide="slash" class="text-muted d-block mx-auto mb-3" size="48"></i>
-                    <h5 class="fw-semibold">No questions resolved for this exam!</h5>
-                    <p class="text-muted">You must assign manual questions or configure random-pull rules in the exam workspace first.</p>
-                    <div class="d-flex justify-content-center gap-2 mt-4">
-                        <a href="index.php?route=admin/exams&action=questions&id=<?php echo $exam['id']; ?>" class="btn btn-sm btn-primary">Assign Questions</a>
-                        <a href="index.php?route=admin/exams&action=rules&id=<?php echo $exam['id']; ?>" class="btn btn-sm btn-outline-secondary">Add Rules</a>
-                    </div>
+            <div class="card border-0 shadow-sm rounded-3 p-5 text-center text-muted" id="empty-resolved-card">
+                <i data-lucide="help-circle" size="48" class="opacity-25 mb-3"></i>
+                <h4 class="text-dark">No questions resolved</h4>
+                <p class="small text-muted mb-0">The current rules and fixed picks produced an empty question set. Please add questions or random pull rules first.</p>
+                <div class="mt-4">
+                    <a href="index.php?route=admin/exams&action=build&id=<?php echo $exam['id']; ?>" class="btn btn-outline-primary font-sans small">
+                        Go to Exam Builder &rarr;
+                    </a>
                 </div>
             </div>
         <?php else: ?>
-            <div class="preview-exam-container">
+            <div class="d-flex flex-column gap-4" id="resolved-questions-loop">
                 <?php foreach ($resolvedQuestions as $idx => $q): ?>
-                    <div class="mb-4">
-                        <div class="text-muted fw-bold mb-2 ps-1 font-sans text-uppercase small">Question <?php echo ($idx + 1); ?> of <?php echo count($resolvedQuestions); ?></div>
-                        <?php echo QuestionRenderer::render($q, $q['options'], null, true); ?>
+                    <div class="position-relative" id="resolved-q-wrapper-<?php echo $q['id']; ?>">
+                        <!-- Header counter overlay -->
+                        <div class="position-absolute translate-middle-y ms-4" style="top: 0; z-index: 10;">
+                            <span class="badge bg-dark text-white shadow-sm font-mono" style="padding: 0.4rem 0.8rem; border-radius: 20px;">
+                                Question <?php echo $idx + 1; ?>
+                            </span>
+                        </div>
+                        
+                        <!-- Dynamic rendered question -->
+                        <div class="pt-3">
+                            <?php echo QuestionRenderer::render($q); ?>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-    </div>
-
-    <!-- Right Sidebar Exam Stats -->
-    <div class="col-xl-3 col-lg-4 mb-4">
-        <div class="card border-0 shadow-sm sticky-top" style="top: 24px;">
-            <div class="card-header bg-white py-3 border-bottom">
-                <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-1">
-                    <i data-lucide="info" size="16" class="text-primary"></i> Exam Assembly Details
-                </h6>
-            </div>
-            <div class="card-body p-4">
-                <div class="d-flex flex-column gap-3">
-                    <div>
-                        <span class="text-muted small d-block">Duration Limit</span>
-                        <strong class="fs-5 text-dark"><?php echo $exam['duration_minutes']; ?> Minutes</strong>
-                    </div>
-                    <div>
-                        <span class="text-muted small d-block">Questions Count</span>
-                        <strong class="fs-5 text-dark"><?php echo count($resolvedQuestions); ?> Total</strong>
-                    </div>
-                    <div>
-                        <span class="text-muted small d-block">Total Points Weight</span>
-                        <strong class="fs-5 text-dark"><?php 
-                            $totalPoints = 0;
-                            foreach ($resolvedQuestions as $q) {
-                                $totalPoints += floatval($q['points']);
-                            }
-                            echo $totalPoints;
-                        ?> pts</strong>
-                    </div>
-                    <div>
-                        <span class="text-muted small d-block">Passing Score</span>
-                        <strong class="fs-5 text-dark"><?php echo floatval($exam['pass_percentage']); ?>% <span class="text-muted small font-sans fw-normal">(<?php echo round($totalPoints * $exam['pass_percentage'] / 100, 2); ?> pts)</span></strong>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 

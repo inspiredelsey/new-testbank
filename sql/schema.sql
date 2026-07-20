@@ -291,5 +291,95 @@ CREATE TABLE IF NOT EXISTS ngn_questions (
   INDEX idx_ngn_q_type (type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Phase 4 Exam Engine Additions
+ALTER TABLE exams ADD COLUMN course_id INT NULL;
+ALTER TABLE exams ADD COLUMN gradebook_category ENUM('formative','summative') DEFAULT 'summative';
+
+CREATE TABLE IF NOT EXISTS exam_questions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  exam_id INT NOT NULL,
+  question_id INT NOT NULL,
+  order_index INT DEFAULT 0,
+  points_override DECIMAL(6,2) NULL,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+  FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS exam_rules (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  exam_id INT NOT NULL,
+  category_id INT NOT NULL,
+  difficulty ENUM('easy','medium','hard','any') DEFAULT 'any',
+  question_count INT,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================================================
+-- STUDENT ATTEMPT FLOW TABLES (Appended in this step)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS exam_attempts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  exam_id INT NOT NULL,
+  user_id INT NOT NULL,
+  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  submitted_at TIMESTAMP NULL,
+  status ENUM('in_progress','submitted','graded') NOT NULL DEFAULT 'in_progress',
+  score DECIMAL(6,2) NULL,
+  percentage DECIMAL(5,2) NULL,
+  passed BOOLEAN NULL,
+  resolved_question_ids JSON NULL,
+  FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_attempt_exam (exam_id),
+  INDEX idx_attempt_user (user_id),
+  INDEX idx_attempt_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS attempt_answers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  attempt_id INT NOT NULL,
+  question_id INT NOT NULL,
+  answer_data JSON NULL,
+  is_correct BOOLEAN NULL,
+  points_awarded DECIMAL(6,2) NULL,
+  needs_manual_grading BOOLEAN NOT NULL DEFAULT FALSE,
+  FOREIGN KEY (attempt_id) REFERENCES exam_attempts(id) ON DELETE CASCADE,
+  FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+  UNIQUE (attempt_id, question_id),
+  INDEX idx_answer_attempt (attempt_id),
+  INDEX idx_answer_question (question_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS gradebook_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  course_id INT NOT NULL,
+  item_type ENUM('quiz','manual') NOT NULL,
+  item_id INT NULL,
+  title VARCHAR(200) NOT NULL,
+  weight DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  max_score DECIMAL(6,2) NOT NULL DEFAULT 100.00,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  FOREIGN KEY (item_id) REFERENCES exams(id) ON DELETE SET NULL,
+  INDEX idx_grade_item_course (course_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS gradebook_scores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  gradebook_item_id INT NOT NULL,
+  user_id INT NOT NULL,
+  score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+  recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_grade_score_unique (gradebook_item_id, user_id),
+  FOREIGN KEY (gradebook_item_id) REFERENCES gradebook_items(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_grade_score_item (gradebook_item_id),
+  INDEX idx_grade_score_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
 
 

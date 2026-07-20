@@ -147,6 +147,20 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/essay-grading':
+        require_once __DIR__ . '/testbank/admin/controllers/EssayGradingController.php';
+        $controller = new EssayGradingController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
+    case 'admin/gradebook':
+        require_once __DIR__ . '/testbank/admin/controllers/GradebookController.php';
+        $controller = new GradebookController();
+        $action = $_GET['action'] ?? 'index';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/users':
         require_once __DIR__ . '/testbank/admin/controllers/UserController.php';
         $controller = new UserController();
@@ -186,27 +200,40 @@ switch ($route) {
         break;
 
     case 'student/exam/start':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
+        require_once __DIR__ . '/testbank/site/controllers/AttemptController.php';
+        $controller = new AttemptController();
         $controller->handleRequest('start');
         break;
 
     case 'student/exam/take':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
+        require_once __DIR__ . '/testbank/site/controllers/AttemptController.php';
+        $controller = new AttemptController();
         $controller->handleRequest('take');
         break;
 
     case 'student/exam/submit':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
+        require_once __DIR__ . '/testbank/site/controllers/AttemptController.php';
+        $controller = new AttemptController();
         $controller->handleRequest('submit');
         break;
 
+    case 'student/exam/pending':
+        require_once __DIR__ . '/testbank/site/controllers/AttemptController.php';
+        $controller = new AttemptController();
+        $controller->handleRequest('pending');
+        break;
+
     case 'student/exam/review':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
+        require_once __DIR__ . '/testbank/site/controllers/AttemptController.php';
+        $controller = new AttemptController();
         $controller->handleRequest('review');
+        break;
+
+    case 'student/gradebook':
+        require_once __DIR__ . '/testbank/site/controllers/GradebookController.php';
+        $controller = new GradebookController();
+        $action = $_GET['action'] ?? 'mygrades';
+        $controller->handleRequest($action);
         break;
 
     default:

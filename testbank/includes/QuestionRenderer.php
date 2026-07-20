@@ -817,4 +817,463 @@ class QuestionRenderer {
         ];
         return $classes[$difficulty] ?? 'bg-secondary text-white';
     }
+
+    /**
+     * Renders student-facing interactive question interface for all 14 types
+     */
+    public static function renderInteractive($question, $existingAnswer = null) {
+        $type = $question['type'];
+        $qId = intval($question['id']);
+        
+        // Parse metadata/question_data
+        $qData = [];
+        if (is_string($question['question_data'] ?? '')) {
+            $qData = json_decode($question['question_data'], true) ?: [];
+        } else if (is_array($question['question_data'] ?? null)) {
+            $qData = $question['question_data'];
+        }
+
+        // Parse saved answer
+        $ansData = null;
+        if ($existingAnswer !== null) {
+            if (is_array($existingAnswer)) {
+                $ansData = $existingAnswer['answer_data'] ?? null;
+            } else {
+                $ansData = $existingAnswer;
+            }
+        }
+        if (is_string($ansData)) {
+            $ansData = json_decode($ansData, true);
+        }
+
+        $options = $question['options'] ?? [];
+
+        // Build HTML wrapper
+        $html = "<div class='card border-0 shadow-sm rounded-3 overflow-hidden mb-3 interactive-question-card' id='interactive-q-{$qId}' data-question-id='{$qId}' data-type='{$type}'>";
+        
+        // Header
+        $html .= "  <div class='card-header bg-light py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2'>";
+        $html .= "    <div class='d-flex align-items-center gap-2'>";
+        $html .= "      <span class='badge bg-primary text-white font-sans px-2.5 py-1.5' style='font-size: 0.75rem;'>" . self::getTypeLabel($type) . "</span>";
+        $html .= "      <span class='text-muted small font-sans'>(" . floatval($question['points'] ?? 1.00) . " pts)</span>";
+        $html .= "    </div>";
+        $difficultyClass = self::getDifficultyBadgeClass($question['difficulty'] ?? 'medium');
+        $html .= "    <span class='badge " . $difficultyClass . " font-sans text-capitalize'>" . htmlspecialchars($question['difficulty'] ?? 'medium') . "</span>";
+        $html .= "  </div>";
+
+        // Body
+        $html .= "  <div class='card-body p-4'>";
+        $html .= "    <div class='fs-5 fw-medium text-dark font-sans mb-4' style='white-space: pre-wrap;'>" . htmlspecialchars($question['question_text'] ?? '') . "</div>";
+        $html .= "    <div class='question-interactive-content'>";
+
+        switch ($type) {
+            case 'mcq_single':
+            case 'true_false':
+                $selected = $ansData['selected'] ?? '';
+                $html .= "<div class='mcq-single-container d-flex flex-column gap-2' data-question-id='{$qId}'>";
+                foreach ($options as $opt) {
+                    $checked = ($opt['id'] == $selected) ? 'checked' : '';
+                    $html .= "
+                    <label class='form-check option-item p-3 mb-1 rounded border border-light-subtle d-flex align-items-center gap-3 cursor-pointer hover-bg-light transition-all'>
+                        <input class='form-check-input mt-0' type='radio' name='q_{$qId}' value='{$opt['id']}' {$checked} onchange='onMCQSingleChange({$qId}, this.value)' style='cursor: pointer;'>
+                        <span class='font-sans'>".htmlspecialchars($opt['option_text'] ?? '')."</span>
+                    </label>";
+                }
+                $html .= "</div>";
+                break;
+
+            case 'mcq_multi_sata':
+            case 'mcq_multi':
+            case 'mcq_extended':
+                $selectedList = $ansData['selected'] ?? [];
+                if (!is_array($selectedList)) { $selectedList = !empty($selectedList) ? [$selectedList] : []; }
+
+                if ($type === 'mcq_extended') {
+                    $selectCount = intval($qData['select_count'] ?? 1);
+                    $html .= "<div class='mcq-extended-container' data-question-id='{$qId}' data-select-count='{$selectCount}'>";
+                    $html .= "  <div class='alert alert-info py-2 px-3 small font-sans mb-3 d-flex justify-content-between align-items-center'>";
+                    $html .= "    <span>Please select exactly <strong>{$selectCount}</strong> option(s).</span>";
+                    $html .= "    <span class='extended-counter fw-bold'><span class='current-count'>".count($selectedList)."</span> of {$selectCount} selected</span>";
+                    $html .= "  </div>";
+                } else {
+                    $html .= "<div class='mcq-multi-container d-flex flex-column gap-2' data-question-id='{$qId}'>";
+                }
+
+                foreach ($options as $opt) {
+                    $checked = in_array($opt['id'], $selectedList) ? 'checked' : '';
+                    $onChange = ($type === 'mcq_extended') ? "onMCQExtendedChange({$qId}, {$selectCount})" : "onMCQMultiChange({$qId})";
+                    $html .= "
+                    <label class='form-check option-item p-3 mb-1 rounded border border-light-subtle d-flex align-items-center gap-3 cursor-pointer hover-bg-light transition-all'>
+                        <input class='form-check-input mt-0' type='checkbox' name='q_{$qId}[]' value='{$opt['id']}' {$checked} onchange='{$onChange}' style='cursor: pointer;'>
+                        <span class='font-sans'>".htmlspecialchars($opt['option_text'] ?? '')."</span>
+                    </label>";
+                }
+                $html .= "</div>";
+                break;
+
+            case 'matching':
+                $left = $qData['left'] ?? [];
+                $right = $qData['right'] ?? [];
+                $pairs = $ansData['pairs'] ?? [];
+                $pairMap = [];
+                foreach ($pairs as $p) {
+                    if (isset($p[0]) && isset($p[1])) {
+                        $pairMap[$p[0]] = $p[1];
+                    }
+                }
+
+                $html .= "<div class='matching-container' data-question-id='{$qId}'>";
+                $html .= "  <div class='table-responsive border rounded-3'>";
+                $html .= "    <table class='table table-bordered align-middle mb-0 font-sans'>";
+                $html .= "      <thead class='table-light text-muted small uppercase'><tr><th style='width: 50%;'>Concept</th><th style='width: 50%;'>Your Match</th></tr></thead>";
+                $html .= "      <tbody>";
+                foreach ($left as $lItem) {
+                    $selectedRight = $pairMap[$lItem['id']] ?? '';
+                    $html .= "<tr>";
+                    $html .= "  <td class='p-3 fw-medium text-dark'>" . htmlspecialchars($lItem['text'] ?? '') . "</td>";
+                    $html .= "  <td class='p-3'>";
+                    $html .= "    <select class='form-select border-primary' onchange='onMatchingChange({$qId})' data-left-id='".htmlspecialchars($lItem['id'])."'>";
+                    $html .= "      <option value=''>-- Select Match --</option>";
+                    foreach ($right as $rItem) {
+                        $sel = ($rItem['id'] == $selectedRight) ? 'selected' : '';
+                        $html .= "  <option value='".htmlspecialchars($rItem['id'])."' {$sel}>".htmlspecialchars($rItem['text'] ?? '')."</option>";
+                    }
+                    $html .= "    </select>";
+                    $html .= "  </td>";
+                    $html .= "</tr>";
+                }
+                $html .= "      </tbody>";
+                $html .= "    </table>";
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'drag_drop_ordered':
+                $items = $qData['items'] ?? [];
+                $distractors = $qData['distractors'] ?? [];
+                $allPossible = array_merge($items, $distractors);
+
+                $savedOrder = $ansData['order'] ?? [];
+                if (!empty($savedOrder)) {
+                    $ordered = [];
+                    $byKey = [];
+                    foreach ($allPossible as $itm) { $byKey[$itm['id']] = $itm; }
+                    foreach ($savedOrder as $id) {
+                        if (isset($byKey[$id])) {
+                            $ordered[] = $byKey[$id];
+                            unset($byKey[$id]);
+                        }
+                    }
+                    foreach ($byKey as $itm) { $ordered[] = $itm; }
+                    $allPossible = $ordered;
+                } else {
+                    shuffle($allPossible);
+                }
+
+                $html .= "<div class='drag-drop-ordered-container' data-question-id='{$qId}'>";
+                $html .= "  <div class='alert alert-light border py-1.5 px-3 small font-sans text-muted mb-2 d-flex align-items-center gap-2'>";
+                $html .= "    <i class='lucide-grip-vertical text-muted' style='width:16px; height:16px;'></i>";
+                $html .= "    <span>Drag and drop items to arrange them in the correct order.</span>";
+                $html .= "  </div>";
+                $html .= "  <ul class='list-group sortable-list' id='sortable_{$qId}' style='cursor: grab;'>";
+                foreach ($allPossible as $itm) {
+                    $html .= "  <li class='list-group-item d-flex align-items-center gap-3 py-3 px-3 mb-2 border rounded-3 bg-white shadow-sm' data-id='".htmlspecialchars($itm['id'])."'>";
+                    $html .= "    <i class='lucide-grip-vertical text-muted' style='width: 18px; height: 18px;'></i>";
+                    $html .= "    <span class='font-sans fw-medium text-dark'>".htmlspecialchars($itm['text'] ?? '')."</span>";
+                    $html .= "  </li>";
+                }
+                $html .= "  </ul>";
+                $html .= "</div>";
+                break;
+
+            case 'matrix_single':
+            case 'matrix_multi':
+                $rows = $qData['rows'] ?? [];
+                $columns = $qData['columns'] ?? [];
+                $answers = $ansData['answers'] ?? [];
+
+                $isMulti = ($type === 'matrix_multi');
+                $inputType = $isMulti ? 'checkbox' : 'radio';
+
+                $html .= "<div class='matrix-container' data-question-id='{$qId}' data-matrix-type='{$type}'>";
+                $html .= "  <div class='table-responsive border rounded-3'>";
+                $html .= "    <table class='table table-bordered align-middle text-center mb-0 font-sans'>";
+                $html .= "      <thead class='table-light text-muted small uppercase'>";
+                $html .= "        <tr>";
+                $html .= "          <th class='text-start' style='width: 40%;'>Findings / Rows</th>";
+                foreach ($columns as $col) {
+                    $html .= "      <th>" . htmlspecialchars($col['label'] ?? '') . "</th>";
+                }
+                $html .= "        </tr>";
+                $html .= "      </thead>";
+                $html .= "      <tbody>";
+                foreach ($rows as $row) {
+                    $rowId = $row['id'] ?? '';
+                    $selectedCols = $answers[$rowId] ?? [];
+                    if (!is_array($selectedCols)) { $selectedCols = !empty($selectedCols) ? [$selectedCols] : []; }
+
+                    $html .= "        <tr data-row-id='".htmlspecialchars($rowId)."'>";
+                    $html .= "          <td class='text-start fw-medium text-dark'>" . htmlspecialchars($row['label'] ?? '') . "</td>";
+                    foreach ($columns as $col) {
+                        $colId = $col['id'] ?? '';
+                        $checked = in_array($colId, $selectedCols) ? 'checked' : '';
+                        $inputName = "matrix_{$qId}_" . htmlspecialchars($rowId);
+                        $html .= "        <td>";
+                        $html .= "          <input class='form-check-input' type='{$inputType}' name='{$inputName}" . ($isMulti ? '[]' : '') . "' value='".htmlspecialchars($colId)."' {$checked} onchange='onMatrixChange({$qId})' style='transform: scale(1.1); cursor: pointer;'>";
+                        $html .= "        </td>";
+                    }
+                    $html .= "        </tr>";
+                }
+                $html .= "      </tbody>";
+                $html .= "    </table>";
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'cloze_dropdown':
+                $passage = $qData['passage'] ?? '';
+                $blanks = $qData['blanks'] ?? [];
+                $savedBlanks = $ansData['blanks'] ?? [];
+
+                $blanksMap = [];
+                foreach ($blanks as $blank) {
+                    $blanksMap[$blank['id']] = $blank;
+                }
+
+                $escapedPassage = htmlspecialchars($passage);
+                $renderedPassage = preg_replace_callback('/\{\{([^}]+)\}\}/', function($matches) use ($blanksMap, $savedBlanks, $qId) {
+                    $blankId = trim($matches[1]);
+                    if (!isset($blanksMap[$blankId])) {
+                        return "{{ " . htmlspecialchars($blankId) . " }}";
+                    }
+
+                    $blank = $blanksMap[$blankId];
+                    $options = $blank['options'] ?? [];
+                    $selectedVal = $savedBlanks[$blankId] ?? '';
+
+                    $selectHtml = "<select class='form-select form-select-sm d-inline-block w-auto border-primary' onchange='onClozeDropdownChange({$qId})' data-blank-id='".htmlspecialchars($blankId)."' style='margin: 0 4px;'>";
+                    $selectHtml .= "<option value=''>-- Select --</option>";
+                    foreach ($options as $opt) {
+                        $sel = ($opt === $selectedVal) ? 'selected' : '';
+                        $selectHtml .= "<option value='".htmlspecialchars($opt)."' {$sel}>" . htmlspecialchars($opt) . "</option>";
+                    }
+                    $selectHtml .= "</select>";
+                    return $selectHtml;
+                }, $escapedPassage);
+
+                $html .= "<div class='cloze-dropdown-container' data-question-id='{$qId}'>";
+                $html .= "  <div class='p-3 bg-light rounded-3 font-sans border' style='line-height: 1.8; font-size: 1.1rem; white-space: pre-wrap;'>";
+                $html .= $renderedPassage;
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'cloze_dragdrop':
+                $passage = $qData['passage'] ?? '';
+                $blanks = $qData['blanks'] ?? [];
+                $savedBlanks = $ansData['blanks'] ?? [];
+
+                $blanksMap = [];
+                foreach ($blanks as $blank) {
+                    $blanksMap[$blank['id']] = $blank;
+                }
+
+                $escapedPassage = htmlspecialchars($passage);
+                $renderedPassage = preg_replace_callback('/\{\{([^}]+)\}\}/', function($matches) use ($blanksMap, $savedBlanks, $qId) {
+                    $blankId = trim($matches[1]);
+                    if (!isset($blanksMap[$blankId])) {
+                        return "{{ " . htmlspecialchars($blankId) . " }}";
+                    }
+
+                    $savedVal = $savedBlanks[$blankId] ?? '';
+                    $displayVal = $savedVal !== '' ? htmlspecialchars($savedVal) : 'Drop here';
+                    $activeClass = $savedVal !== '' ? 'bg-primary-subtle border-primary text-primary-emphasis fw-bold' : 'bg-white border-dashed text-muted';
+
+                    return "<span class='cloze-drop-target d-inline-flex align-items-center justify-content-center border rounded px-3 py-1 align-middle {$activeClass}' data-blank-id='".htmlspecialchars($blankId)."' style='min-width: 120px; min-height: 36px; margin: 0 4px; cursor: pointer;' onclick='onClozeTargetClick({$qId}, this)'>{$displayVal}</span>";
+                }, $escapedPassage);
+
+                $poolOptions = [];
+                foreach ($blanks as $b) {
+                    foreach ($b['options'] ?? [] as $opt) {
+                        $poolOptions[] = $opt;
+                    }
+                }
+                $poolOptions = array_unique($poolOptions);
+                shuffle($poolOptions);
+
+                $html .= "<div class='cloze-dragdrop-container' data-question-id='{$qId}'>";
+                $html .= "  <div class='p-3 bg-light rounded-3 font-sans border text-dark mb-3' style='line-height: 2.0; font-size: 1.1rem; white-space: pre-wrap;'>";
+                $html .= $renderedPassage;
+                $html .= "  </div>";
+                $html .= "  <div class='option-pool-section'>";
+                $html .= "    <div class='text-muted small uppercase mb-2 font-sans fw-semibold' style='font-size: 0.75rem; letter-spacing: 0.5px;'>Click an option below, then click a target slot above to place it:</div>";
+                $html .= "    <div class='d-flex flex-wrap gap-2 align-items-center'>";
+                foreach ($poolOptions as $opt) {
+                    $html .= "    <button type='button' class='btn btn-outline-secondary btn-sm font-sans px-3 py-2 rounded-3 option-token d-flex align-items-center gap-1.5' onclick='onClozeOptionSelect({$qId}, this)' data-value='".htmlspecialchars($opt)."'>";
+                    $html .= "      <i class='lucide-grip-horizontal' style='width: 14px; height: 14px;'></i>";
+                    $html .= "      <span>" . htmlspecialchars($opt) . "</span>";
+                    $html .= "    </button>";
+                }
+                $html .= "    <button type='button' class='btn btn-outline-danger btn-sm font-sans rounded-3' onclick='clearClozeSelections({$qId})'>Clear All</button>";
+                $html .= "    </div>";
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'highlight':
+                $passageHtml = $qData['passage_html'] ?? '';
+                $segments = $qData['segments'] ?? [];
+                $selectedSegments = $ansData['segments'] ?? [];
+
+                $sanitizedPassage = strip_tags($passageHtml, '<em><strong><br>');
+
+                usort($segments, function($a, $b) {
+                    return strlen($b['text'] ?? '') - strlen($a['text'] ?? '');
+                });
+
+                $placeholders = [];
+                foreach ($segments as $seg) {
+                    $segId = $seg['id'] ?? '';
+                    $segText = $seg['text'] ?? '';
+                    if ($segText === '') continue;
+
+                    $isSelected = in_array($segId, $selectedSegments);
+                    $activeClass = $isSelected ? 'bg-primary text-white border-primary fw-bold shadow-sm' : 'bg-light hover-bg-primary-subtle border-light-subtle text-dark';
+
+                    $wrappedHtml = "<span class='highlight-segment px-2.5 py-1 rounded-2 border d-inline-block {$activeClass}' data-segment-id='".htmlspecialchars($segId)."' onclick='onHighlightToggle({$qId}, this)' style='cursor: pointer; margin: 2px 0; transition: all 0.2s;'>".htmlspecialchars($segText)."</span>";
+
+                    $placeholder = "##SEGMENT_" . $segId . "##";
+                    $placeholders[$placeholder] = $wrappedHtml;
+
+                    $sanitizedPassage = str_replace($segText, $placeholder, $sanitizedPassage);
+                }
+
+                foreach ($placeholders as $placeholder => $wrappedHtml) {
+                    $sanitizedPassage = str_replace($placeholder, $wrappedHtml, $sanitizedPassage);
+                }
+
+                $html .= "<div class='highlight-container' data-question-id='{$qId}'>";
+                $html .= "  <div class='p-4 bg-light rounded-3 font-sans border text-dark' style='line-height: 2.2; font-size: 1.1rem;'>";
+                $html .= $sanitizedPassage;
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'bowtie':
+                $leftOptions = $qData['left_options'] ?? [];
+                $centerOptions = $qData['center_options'] ?? [];
+                $rightOptions = $qData['right_options'] ?? [];
+
+                $leftTarget = intval($qData['left_target_count'] ?? 1);
+                $centerTarget = intval($qData['center_target_count'] ?? 1);
+                $rightTarget = intval($qData['right_target_count'] ?? 1);
+
+                $selLeft = $ansData['left'] ?? [];
+                $selCenter = $ansData['center'] ?? [];
+                $selRight = $ansData['right'] ?? [];
+
+                $html .= "<div class='bowtie-container' data-question-id='{$qId}' data-left-target='{$leftTarget}' data-center-target='{$centerTarget}' data-right-target='{$rightTarget}'>";
+                $html .= "  <div class='row g-3 font-sans'>";
+
+                // Left Column
+                $html .= "    <div class='col-md-4'>";
+                $html .= "      <div class='p-3 border rounded-3 bg-light h-100 d-flex flex-column'>";
+                $html .= "        <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "          <h6 class='fw-bold mb-0 text-dark'>Actions to Take</h6>";
+                $html .= "          <span class='badge bg-secondary text-white px-2 py-1 small bowtie-counter-left'>".count($selLeft)." / {$leftTarget}</span>";
+                $html .= "        </div>";
+                $html .= "        <hr class='my-2 opacity-50'>";
+                $html .= "        <div class='d-flex flex-column gap-2 mt-1 bowtie-list' data-col='left'>";
+                foreach ($leftOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $isSelected = in_array($optId, $selLeft);
+                    $activeClass = $isSelected ? 'bg-primary text-white border-primary fw-bold shadow-sm' : 'bg-white text-dark hover-bg-light border-light-subtle';
+                    $html .= "      <div class='p-2.5 border rounded-2 d-flex align-items-start gap-2 bowtie-option {$activeClass}' data-id='".htmlspecialchars($optId)."' onclick='onBowtieToggle({$qId}, \"left\", \"".htmlspecialchars($optId)."\")' style='font-size: 0.9rem; cursor: pointer; transition: all 0.2s;'>";
+                    $html .= "        <span class='font-sans'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "      </div>";
+                }
+                $html .= "        </div>";
+                $html .= "      </div>";
+                $html .= "    </div>";
+
+                // Center Column
+                $html .= "    <div class='col-md-4'>";
+                $html .= "      <div class='p-3 border border-primary border-opacity-25 rounded-3 bg-light h-100 d-flex flex-column' style='background-color: #f8fafc;'>";
+                $html .= "        <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "          <h6 class='fw-bold mb-0 text-primary'>Condition Most Likely</h6>";
+                $html .= "          <span class='badge bg-primary text-white border border-primary px-2 py-1 small bowtie-counter-center'>".count($selCenter)." / {$centerTarget}</span>";
+                $html .= "        </div>";
+                $html .= "        <hr class='my-2 opacity-50'>";
+                $html .= "        <div class='d-flex flex-column gap-2 mt-1 bowtie-list' data-col='center'>";
+                foreach ($centerOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $isSelected = in_array($optId, $selCenter);
+                    $activeClass = $isSelected ? 'bg-primary text-white border-primary fw-bold shadow-sm' : 'bg-white text-dark hover-bg-light border-light-subtle';
+                    $html .= "      <div class='p-2.5 border rounded-2 d-flex align-items-start gap-2 bowtie-option {$activeClass}' data-id='".htmlspecialchars($optId)."' onclick='onBowtieToggle({$qId}, \"center\", \"".htmlspecialchars($optId)."\")' style='font-size: 0.9rem; cursor: pointer; transition: all 0.2s;'>";
+                    $html .= "        <span class='font-sans'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "      </div>";
+                }
+                $html .= "        </div>";
+                $html .= "      </div>";
+                $html .= "    </div>";
+
+                // Right Column
+                $html .= "    <div class='col-md-4'>";
+                $html .= "      <div class='p-3 border rounded-3 bg-light h-100 d-flex flex-column'>";
+                $html .= "        <div class='d-flex justify-content-between align-items-center mb-2'>";
+                $html .= "          <h6 class='fw-bold mb-0 text-dark'>Parameters to Monitor</h6>";
+                $html .= "          <span class='badge bg-secondary text-white px-2 py-1 small bowtie-counter-right'>".count($selRight)." / {$rightTarget}</span>";
+                $html .= "        </div>";
+                $html .= "        <hr class='my-2 opacity-50'>";
+                $html .= "        <div class='d-flex flex-column gap-2 mt-1 bowtie-list' data-col='right'>";
+                foreach ($rightOptions as $opt) {
+                    $optId = $opt['id'] ?? '';
+                    $isSelected = in_array($optId, $selRight);
+                    $activeClass = $isSelected ? 'bg-primary text-white border-primary fw-bold shadow-sm' : 'bg-white text-dark hover-bg-light border-light-subtle';
+                    $html .= "      <div class='p-2.5 border rounded-2 d-flex align-items-start gap-2 bowtie-option {$activeClass}' data-id='".htmlspecialchars($optId)."' onclick='onBowtieToggle({$qId}, \"right\", \"".htmlspecialchars($optId)."\")' style='font-size: 0.9rem; cursor: pointer; transition: all 0.2s;'>";
+                    $html .= "        <span class='font-sans'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "      </div>";
+                }
+                $html .= "        </div>";
+                $html .= "      </div>";
+                $html .= "    </div>";
+
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'fill_blank_calc':
+                $unit = $qData['unit'] ?? '';
+                $savedVal = $ansData['value'] ?? '';
+
+                $html .= "<div class='fill-blank-calc-container font-sans' data-question-id='{$qId}'>";
+                $html .= "  <label class='form-label text-muted small fw-semibold mb-2'>Enter your numeric answer below:</label>";
+                $html .= "  <div class='input-group' style='max-width: 300px;'>";
+                $html .= "    <input type='number' step='any' class='form-control border-primary text-dark bg-white' value='".htmlspecialchars($savedVal)."' placeholder='Type numeric response' oninput='onFillBlankCalcChange({$qId}, this.value)' style='font-size: 1.1rem; font-weight: 500;'>";
+                if (!empty($unit)) {
+                    $html .= "  <span class='input-group-text bg-light text-muted fw-bold'>".htmlspecialchars($unit)."</span>";
+                }
+                $html .= "  </div>";
+                $html .= "</div>";
+                break;
+
+            case 'essay':
+                $savedText = $ansData['text'] ?? '';
+                $html .= "<div class='essay-container font-sans' data-question-id='{$qId}'>";
+                $html .= "  <label class='form-label text-muted small fw-semibold mb-2'>Type your essay response below:</label>";
+                $html .= "  <textarea class='form-control font-sans text-dark border-primary bg-white' rows='8' placeholder='Type detailed response here...' oninput='onEssayChange({$qId}, this.value)' style='line-height: 1.6; font-size: 1rem;'>".htmlspecialchars($savedText)."</textarea>";
+                $html .= "</div>";
+                break;
+
+            default:
+                $html .= "    <div class='alert alert-secondary border-0 rounded-3 mb-0'>Unsupported question type.</div>";
+                break;
+        }
+
+        $html .= "    </div>";
+        $html .= "  </div>";
+        $html .= "</div>";
+
+        return $html;
+    }
 }

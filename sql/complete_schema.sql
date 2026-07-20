@@ -410,3 +410,30 @@ CREATE TABLE activity_log (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_activity_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS gradebook_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  course_id INT NOT NULL,
+  item_type ENUM('quiz','manual') NOT NULL,
+  item_id INT NULL,
+  title VARCHAR(200) NOT NULL,
+  weight DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+  max_score DECIMAL(6,2) NOT NULL DEFAULT 100.00,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+  FOREIGN KEY (item_id) REFERENCES exams(id) ON DELETE SET NULL,
+  INDEX idx_grade_item_course (course_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS gradebook_scores (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  gradebook_item_id INT NOT NULL,
+  user_id INT NOT NULL,
+  score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+  recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY idx_grade_score_unique (gradebook_item_id, user_id),
+  FOREIGN KEY (gradebook_item_id) REFERENCES gradebook_items(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_grade_score_item (gradebook_item_id),
+  INDEX idx_grade_score_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

@@ -392,6 +392,11 @@ $activeRoute = $_GET['route'] ?? '';
                         <i data-lucide="check-square"></i> Grading & Stats
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo $activeRoute === 'admin/essay-grading' ? 'active' : ''; ?>" href="index.php?route=admin/essay-grading">
+                        <i data-lucide="award"></i> Essay Grading
+                    </a>
+                </li>
                 <?php if (Auth::isAdmin()): ?>
                 <li class="nav-item">
                     <a class="nav-link <?php echo $activeRoute === 'admin/users' ? 'active' : ''; ?>" href="index.php?route=admin/users">

@@ -110,6 +110,45 @@ class Database {
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
                 FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE SET NULL,
                 FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )",
+            "exam_questions" => "CREATE TABLE IF NOT EXISTS exam_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exam_id INT NOT NULL,
+                question_id INT NOT NULL,
+                order_index INT DEFAULT 0,
+                points_override DECIMAL(6,2) NULL,
+                FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+            )",
+            "exam_rules" => "CREATE TABLE IF NOT EXISTS exam_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exam_id INT NOT NULL,
+                category_id INT NOT NULL,
+                difficulty VARCHAR(20) DEFAULT 'any',
+                question_count INT,
+                FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+            )",
+            "gradebook_items" => "CREATE TABLE IF NOT EXISTS gradebook_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                course_id INT NOT NULL,
+                item_type TEXT NOT NULL,
+                item_id INT NULL,
+                title VARCHAR(200) NOT NULL,
+                weight DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+                max_score DECIMAL(6,2) NOT NULL DEFAULT 100.00,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+                FOREIGN KEY (item_id) REFERENCES exams(id) ON DELETE SET NULL
+            )",
+            "gradebook_scores" => "CREATE TABLE IF NOT EXISTS gradebook_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                gradebook_item_id INT NOT NULL,
+                user_id INT NOT NULL,
+                score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (gradebook_item_id, user_id),
+                FOREIGN KEY (gradebook_item_id) REFERENCES gradebook_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )"
         ];
 
@@ -125,11 +164,14 @@ class Database {
         $alters = [
             "ALTER TABLE cases ADD COLUMN created_by INTEGER",
             "ALTER TABLE exams ADD COLUMN course_id INTEGER",
+            "ALTER TABLE exams ADD COLUMN gradebook_category VARCHAR(50) DEFAULT 'summative'",
             "ALTER TABLE questions ADD COLUMN case_id INTEGER",
             "ALTER TABLE questions ADD COLUMN case_order INTEGER",
             "ALTER TABLE courses ADD COLUMN category_id INTEGER",
             "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
-            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00"
+            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00",
+            "ALTER TABLE exam_attempts ADD COLUMN resolved_question_ids TEXT",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_question_unique ON attempt_answers (attempt_id, question_id)"
         ];
 
         foreach ($alters as $alter) {
@@ -213,6 +255,7 @@ class Database {
         // Apply SQLite-compatible ALTER TABLE additions to ensure optional/integrated columns exist
         $alters = [
             "ALTER TABLE exams ADD COLUMN course_id INTEGER",
+            "ALTER TABLE exams ADD COLUMN gradebook_category VARCHAR(50) DEFAULT 'summative'",
             "ALTER TABLE questions ADD COLUMN case_id INTEGER",
             "ALTER TABLE questions ADD COLUMN case_order INTEGER",
             "ALTER TABLE courses ADD COLUMN category_id INTEGER",

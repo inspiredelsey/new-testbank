@@ -1,6 +1,7 @@
 <?php
 /**
  * Auto Grader class for evaluating test attempts.
+ * Implements deterministic grading for all 14 question types.
  */
 
 require_once __DIR__ . '/Database.php';
@@ -10,113 +11,398 @@ class Grader {
     /**
      * Grades a single question answer.
      * Returns array: [is_correct, points_awarded, needs_manual_grading]
+     * Supports all 14 types of questions in the LMS.
      */
-    public static function gradeAnswer($question, $options, $userAnswer) {
+    public static function gradeSingleAnswer($question, $answerData, $options = null) {
         $type = $question['type'];
         $points = floatval($question['points']);
-        
-        if ($userAnswer === null || (is_string($userAnswer) && trim($userAnswer) === '') || (is_array($userAnswer) && empty($userAnswer))) {
+        $scoringMethod = $question['scoring_method'] ?? 'all_or_nothing';
+
+        // Unanswered questions (no attempt_answers row or empty/null) count as 0 points, is_correct=false
+        if ($answerData === null || (is_string($answerData) && trim($answerData) === '') || (is_array($answerData) && empty($answerData))) {
+            if ($type === 'essay') {
+                return [null, null, true];
+            }
             return [false, 0.00, false];
+        }
+
+        // Decode question_data for NGN questions
+        $qData = [];
+        if (is_string($question['question_data'] ?? '')) {
+            $qData = json_decode($question['question_data'], true) ?: [];
+        } else if (is_array($question['question_data'] ?? null)) {
+            $qData = $question['question_data'];
         }
 
         switch ($type) {
             case 'mcq_single':
-                // Find correct option ID
+            case 'true_false':
+                // userAnswer format: "opt_id" or string value (like 'true'/'false')
+                if ($options === null) {
+                    $db = Database::getInstance()->getConnection();
+                    $stmt = $db->prepare("SELECT * FROM question_options WHERE question_id = ? ORDER BY order_index ASC");
+                    $stmt->execute([$question['id']]);
+                    $options = $stmt->fetchAll();
+                }
+
                 $correctOptId = null;
+                $correctOptText = null;
                 foreach ($options as $opt) {
                     if ($opt['is_correct']) {
                         $correctOptId = $opt['id'];
+                        $correctOptText = strtolower(trim($opt['option_text']));
                         break;
                     }
                 }
-                $isCorrect = (intval($userAnswer) === intval($correctOptId));
+
+                $selectedVal = is_array($answerData) ? ($answerData['selected'] ?? null) : $answerData;
+                
+                if ($selectedVal === null) {
+                    return [false, 0.00, false];
+                }
+
+                $isCorrect = false;
+                if ($type === 'true_false') {
+                    // True/False exact string matching
+                    $userValStr = strtolower(trim($selectedVal));
+                    if ($userValStr === '1') $userValStr = 'true';
+                    if ($userValStr === '0') $userValStr = 'false';
+                    
+                    $correctValStr = $correctOptText;
+                    if ($correctValStr === '1') $correctValStr = 'true';
+                    if ($correctValStr === '0') $correctValStr = 'false';
+                    
+                    $isCorrect = ($userValStr === $correctValStr);
+                } else {
+                    // MCQ single: option ID check
+                    $isCorrect = (intval($selectedVal) === intval($correctOptId));
+                }
+
                 $score = $isCorrect ? $points : 0.00;
                 return [$isCorrect, $score, false];
 
             case 'mcq_multi':
-                // MCQ multi: userAnswer is array of option IDs.
-                // It is correct only if the set of selected options exactly matches the set of correct options.
+            case 'mcq_multi_sata':
+                // SATA multi
+                if ($options === null) {
+                    $db = Database::getInstance()->getConnection();
+                    $stmt = $db->prepare("SELECT * FROM question_options WHERE question_id = ? ORDER BY order_index ASC");
+                    $stmt->execute([$question['id']]);
+                    $options = $stmt->fetchAll();
+                }
+
                 $correctOptIds = [];
                 foreach ($options as $opt) {
                     if ($opt['is_correct']) {
                         $correctOptIds[] = intval($opt['id']);
                     }
                 }
-                
-                $userOptIds = array_map('intval', (array)$userAnswer);
-                sort($correctOptIds);
-                sort($userOptIds);
-                
-                $isCorrect = ($correctOptIds === $userOptIds);
-                $score = $isCorrect ? $points : 0.00;
-                return [$isCorrect, $score, false];
 
-            case 'true_false':
-                // Find correct option text
-                $correctText = 'true';
+                $userSelected = isset($answerData['selected']) ? $answerData['selected'] : $answerData;
+                if (!is_array($userSelected)) {
+                    $userSelected = !empty($userSelected) ? [$userSelected] : [];
+                }
+                $userSelected = array_map('intval', $userSelected);
+
+                $totalCorrectCount = count($correctOptIds);
+                if ($totalCorrectCount === 0) {
+                    return [true, $points, false];
+                }
+
+                // Check exact match
+                $userSorted = $userSelected;
+                $correctSorted = $correctOptIds;
+                sort($userSorted);
+                sort($correctSorted);
+                $isExact = ($userSorted === $correctSorted);
+
+                if ($scoringMethod === 'all_or_nothing') {
+                    $score = $isExact ? $points : 0.00;
+                } else {
+                    // partial credit: (correct selections made - incorrect selections made) / total correct options
+                    $correctSelected = count(array_intersect($userSelected, $correctOptIds));
+                    $incorrectSelected = count(array_diff($userSelected, $correctOptIds));
+                    $ratio = ($correctSelected - $incorrectSelected) / $totalCorrectCount;
+                    $ratio = max(0.0, $ratio);
+                    $score = $ratio * $points;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'mcq_extended':
+                // mcq_extended: correct only if selected set exactly equals correct set AND selected count equals select_count
+                // Treat as all-or-nothing regardless of scoring_method per instructions.
+                if ($options === null) {
+                    $db = Database::getInstance()->getConnection();
+                    $stmt = $db->prepare("SELECT * FROM question_options WHERE question_id = ? ORDER BY order_index ASC");
+                    $stmt->execute([$question['id']]);
+                    $options = $stmt->fetchAll();
+                }
+
+                $correctOptIds = [];
                 foreach ($options as $opt) {
                     if ($opt['is_correct']) {
-                        $correctText = strtolower(trim($opt['option_text']));
-                        break;
+                        $correctOptIds[] = intval($opt['id']);
                     }
                 }
-                
-                // Map boolean representation
-                $userVal = strtolower(trim($userAnswer));
-                if ($userVal === '1') $userVal = 'true';
-                if ($userVal === '0') $userVal = 'false';
-                
-                $correctVal = $correctText;
-                if ($correctVal === '1') $correctVal = 'true';
-                if ($correctVal === '0') $correctVal = 'false';
 
-                $isCorrect = ($userVal === $correctVal);
-                $score = $isCorrect ? $points : 0.00;
-                return [$isCorrect, $score, false];
-
-            case 'fill_blank':
-                // Fill blank: userAnswer is text. Options are accepted correct strings.
-                // Case-insensitive exact trim comparison with any option
-                $userVal = strtolower(trim($userAnswer));
-                $isCorrect = false;
-                foreach ($options as $opt) {
-                    if (strtolower(trim($opt['option_text'])) === $userVal) {
-                        $isCorrect = true;
-                        break;
-                    }
+                $userSelected = isset($answerData['selected']) ? $answerData['selected'] : $answerData;
+                if (!is_array($userSelected)) {
+                    $userSelected = !empty($userSelected) ? [$userSelected] : [];
                 }
-                $score = $isCorrect ? $points : 0.00;
-                return [$isCorrect, $score, false];
+                $userSelected = array_map('intval', $userSelected);
+
+                $selectCount = intval($qData['select_count'] ?? count($correctOptIds));
+
+                sort($userSelected);
+                sort($correctOptIds);
+
+                $isExact = ($userSelected === $correctOptIds) && (count($userSelected) === $selectCount);
+                $score = $isExact ? $points : 0.00;
+                return [$isExact, $score, false];
 
             case 'matching':
-                // Matching: userAnswer is array of [left_option_id => matched_pair_key_string]
-                // Each match is graded pro-rated
-                $totalPairs = count($options);
-                if ($totalPairs === 0) return [true, $points, false];
-                
+                // userAnswer format: {"pairs": [ [left_id, right_id], ... ]}
+                // Correct format: $qData['correct_pairs'] => [ [left_id, right_id], ... ]
+                // Left elements: $qData['left'] => [ {"id": "left1", "text": "..."} ]
+                $left = $qData['left'] ?? [];
+                $correctPairs = $qData['correct_pairs'] ?? [];
+                $totalPairs = count($correctPairs) > 0 ? count($correctPairs) : count($left);
+
+                if ($totalPairs === 0) {
+                    return [true, $points, false];
+                }
+
+                $userPairs = $answerData['pairs'] ?? [];
+                $userPairMap = [];
+                foreach ($userPairs as $p) {
+                    if (isset($p[0])) {
+                        $userPairMap[$p[0]] = $p[1] ?? '';
+                    }
+                }
+
                 $correctCount = 0;
-                $userPairs = (array)$userAnswer;
-                
-                foreach ($options as $opt) {
-                    $leftId = $opt['id'];
-                    $expectedRight = trim(strtolower($opt['pair_key']));
-                    $actualRight = isset($userPairs[$leftId]) ? trim(strtolower($userPairs[$leftId])) : '';
-                    
-                    if ($expectedRight === $actualRight && $actualRight !== '') {
+                foreach ($correctPairs as $p) {
+                    $lId = $p[0] ?? '';
+                    $rId = $p[1] ?? '';
+                    if ($lId !== '' && isset($userPairMap[$lId]) && $userPairMap[$lId] == $rId) {
                         $correctCount++;
                     }
                 }
+
+                $isExact = ($correctCount === $totalPairs);
+
+                if ($scoringMethod === 'partial_credit') {
+                    $score = ($correctCount / $totalPairs) * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'drag_drop_ordered':
+                // userAnswer format: {"order": ["item_id_1", "item_id_2", ...]}
+                // Correct format: $qData['correct_order'] => ["item_id_1", "item_id_2", ...]
+                $correctOrder = $qData['correct_order'] ?? [];
+                $totalItems = count($correctOrder);
+
+                if ($totalItems === 0) {
+                    return [true, $points, false];
+                }
+
+                $userOrder = $answerData['order'] ?? [];
                 
-                $isCorrect = ($correctCount === $totalPairs);
-                $score = ($correctCount / $totalPairs) * $points;
+                $correctCount = 0;
+                for ($i = 0; $i < $totalItems; $i++) {
+                    if (isset($userOrder[$i]) && $userOrder[$i] === $correctOrder[$i]) {
+                        $correctCount++;
+                    }
+                }
+
+                $isExact = ($correctCount === $totalItems);
+
+                if ($scoringMethod === 'partial_credit') {
+                    $score = ($correctCount / $totalItems) * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'matrix_single':
+            case 'matrix_multi':
+                // userAnswer format: {"answers": {"row_id_1": ["col_id_a", "col_id_b"], "row_id_2": ["col_id_c"]}}
+                // Correct format: $qData['correct'] => {"row_id_1": ["col_id_a", "col_id_b"], ...}
+                $rows = $qData['rows'] ?? [];
+                $totalRows = count($rows);
+
+                if ($totalRows === 0) {
+                    return [true, $points, false];
+                }
+
+                $correctMap = $qData['correct'] ?? [];
+                $userAnswers = $answerData['answers'] ?? [];
+
+                $correctRowsCount = 0;
+                foreach ($rows as $row) {
+                    $rowId = $row['id'] ?? '';
+                    $rowCorrectCols = (array)($correctMap[$rowId] ?? []);
+                    $rowUserCols = (array)($userAnswers[$rowId] ?? []);
+
+                    sort($rowCorrectCols);
+                    sort($rowUserCols);
+
+                    if ($rowCorrectCols === $rowUserCols) {
+                        $correctRowsCount++;
+                    }
+                }
+
+                $isExact = ($correctRowsCount === $totalRows);
+
+                if ($scoringMethod === 'partial_credit') {
+                    $score = ($correctRowsCount / $totalRows) * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'cloze_dropdown':
+            case 'cloze_dragdrop':
+                // userAnswer format: {"blanks": {"blank_1_id": "val", "blank_2_id": "val"}}
+                // Correct format: $qData['blanks'] => [ {"id": "blank_1_id", "correct": "correct_text"}, ... ]
+                $blanks = $qData['blanks'] ?? [];
+                $totalBlanks = count($blanks);
+
+                if ($totalBlanks === 0) {
+                    return [true, $points, false];
+                }
+
+                $userBlanks = $answerData['blanks'] ?? [];
+
+                $correctCount = 0;
+                foreach ($blanks as $b) {
+                    $bId = $b['id'] ?? '';
+                    $correctText = trim(strtolower($b['correct'] ?? ''));
+                    $userText = trim(strtolower($userBlanks[$bId] ?? ''));
+
+                    if ($correctText !== '' && $userText === $correctText) {
+                        $correctCount++;
+                    }
+                }
+
+                $isExact = ($correctCount === $totalBlanks);
+
+                if ($scoringMethod === 'partial_credit') {
+                    $score = ($correctCount / $totalBlanks) * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'highlight':
+                // userAnswer format: {"segments": ["seg_1_id", "seg_3_id"]}
+                // Correct format: $qData['correct_segment_ids'] => ["seg_1_id", "seg_3_id"]
+                $correctSegmentIds = $qData['correct_segment_ids'] ?? [];
+                $totalCorrect = count($correctSegmentIds);
+
+                if ($totalCorrect === 0) {
+                    return [true, $points, false];
+                }
+
+                $userSelected = $answerData['segments'] ?? [];
+                if (!is_array($userSelected)) { $userSelected = []; }
+
+                // Count correct & incorrect selections
+                $correctSelected = count(array_intersect($userSelected, $correctSegmentIds));
+                $incorrectSelected = count(array_diff($userSelected, $correctSegmentIds));
+
+                sort($userSelected);
+                sort($correctSegmentIds);
+                $isExact = ($userSelected === $correctSegmentIds);
+
+                if ($scoringMethod === 'partial_credit') {
+                    $ratio = ($correctSelected - $incorrectSelected) / $totalCorrect;
+                    $ratio = max(0.0, $ratio);
+                    $score = $ratio * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'bowtie':
+                // userAnswer format: {"left": ["id"], "center": ["id"], "right": ["id"]}
+                // Correct format: $qData['correct'] => {"left": ["id"], "center": ["id"], "right": ["id"]}
+                // Bowtie defaults to partial_credit unless specified as all_or_nothing.
+                $correctMap = $qData['correct'] ?? [];
+                $correctLeft = (array)($correctMap['left'] ?? []);
+                $correctCenter = (array)($correctMap['center'] ?? []);
+                $correctRight = (array)($correctMap['right'] ?? []);
+
+                $totalTarget = count($correctLeft) + count($correctCenter) + count($correctRight);
+                if ($totalTarget === 0) {
+                    return [true, $points, false];
+                }
+
+                $userLeft = (array)($answerData['left'] ?? []);
+                $userCenter = (array)($answerData['center'] ?? []);
+                $userRight = (array)($answerData['right'] ?? []);
+
+                $correctLeftCount = count(array_intersect($userLeft, $correctLeft));
+                $correctCenterCount = count(array_intersect($userCenter, $correctCenter));
+                $correctRightCount = count(array_intersect($userRight, $correctRight));
+
+                $totalCorrectUser = $correctLeftCount + $correctCenterCount + $correctRightCount;
+
+                sort($userLeft); sort($correctLeft);
+                sort($userCenter); sort($correctCenter);
+                sort($userRight); sort($correctRight);
+
+                $isExact = ($userLeft === $correctLeft) && ($userCenter === $correctCenter) && ($userRight === $correctRight);
+
+                // Default to partial_credit unless explicitly all_or_nothing
+                $isPartial = ($scoringMethod !== 'all_or_nothing');
+
+                if ($isPartial) {
+                    $ratio = $totalCorrectUser / $totalTarget;
+                    $score = $ratio * $points;
+                } else {
+                    $score = $isExact ? $points : 0.00;
+                }
+
+                return [$isExact, $score, false];
+
+            case 'fill_blank_calc':
+                // userAnswer format: {"value": "numeric"}
+                // Correct format: $qData['correct_value'] => numeric, $qData['tolerance'] => numeric
+                $correctValue = floatval($qData['correct_value'] ?? 0);
+                $tolerance = floatval($qData['tolerance'] ?? 0);
+
+                $userValStr = $answerData['value'] ?? null;
+                if ($userValStr === null || trim($userValStr) === '') {
+                    return [false, 0.00, false];
+                }
+
+                $userValue = floatval($userValStr);
+                $isCorrect = (abs($userValue - $correctValue) <= $tolerance);
+                $score = $isCorrect ? $points : 0.00;
                 return [$isCorrect, $score, false];
 
             case 'essay':
-                // Essay questions require manual grading by an instructor
-                return [null, 0.00, true];
+                // Essay is skipped here; always needs manual grading
+                return [null, null, true];
         }
 
         return [false, 0.00, false];
+    }
+
+    /**
+     * Legacy gradeAnswer to preserve signatures if any external files call it
+     */
+    public static function gradeAnswer($question, $options, $userAnswer) {
+        return self::gradeSingleAnswer($question, $userAnswer, $options);
     }
 
     /**
@@ -125,7 +411,7 @@ class Grader {
     public static function gradeAttempt($attemptId) {
         $db = Database::getInstance()->getConnection();
 
-        // Get attempt and exam
+        // Get attempt and exam details
         $stmt = $db->prepare("
             SELECT ea.*, e.pass_percentage 
             FROM exam_attempts ea 
@@ -136,75 +422,110 @@ class Grader {
         $attempt = $stmt->fetch();
         if (!$attempt) return false;
 
+        $qIds = json_decode($attempt['resolved_question_ids'] ?? '[]', true);
+        if (empty($qIds)) {
+            $qIds = json_decode($attempt['resolved_questions'] ?? '[]', true) ?: [];
+        }
+
         // Get all answers saved so far
         $stmt = $db->prepare("SELECT * FROM attempt_answers WHERE attempt_id = ?");
         $stmt->execute([$attemptId]);
         $answers = $stmt->fetchAll();
-
-        $totalScore = 0.00;
-        $totalPossiblePoints = 0.00;
-        $hasEssay = false;
-
+        $answersByQId = [];
         foreach ($answers as $ans) {
-            $questionId = $ans['question_id'];
-            
+            $answersByQId[$ans['question_id']] = $ans;
+        }
+
+        $totalPointsAwarded = 0.00;
+        $totalPossiblePoints = 0.00;
+        $hasUngradedEssay = false;
+
+        foreach ($qIds as $questionId) {
             // Get question text/type/points
-            $stmt = $db->prepare("SELECT * FROM questions WHERE id = ?");
-            $stmt->execute([$questionId]);
-            $question = $stmt->fetch();
+            $stmtQ = $db->prepare("SELECT * FROM questions WHERE id = ?");
+            $stmtQ->execute([$questionId]);
+            $question = $stmtQ->fetch();
             if (!$question) continue;
 
-            // Get options
-            $stmt = $db->prepare("SELECT * FROM question_options WHERE question_id = ? ORDER BY order_index ASC");
-            $stmt->execute([$questionId]);
-            $options = $stmt->fetchAll();
+            $ansRow = $answersByQId[$questionId] ?? null;
+            $userAnswerData = $ansRow ? json_decode($ansRow['answer_data'], true) : null;
 
-            $userAnswerData = json_decode($ans['answer_data'], true);
+            // Preserve manual grades on essays if we are re-calculating
+            if ($question['type'] === 'essay') {
+                if ($ansRow && $ansRow['needs_manual_grading'] == 0 && $ansRow['points_awarded'] !== null) {
+                    $isCorrect = $ansRow['is_correct'];
+                    $pointsAwarded = floatval($ansRow['points_awarded']);
+                    $needsManual = false;
+                } else {
+                    $isCorrect = null;
+                    $pointsAwarded = null;
+                    $needsManual = true;
+                }
+            } else {
+                list($isCorrect, $pointsAwarded, $needsManual) = self::gradeSingleAnswer($question, $userAnswerData);
+            }
 
-            list($isCorrect, $pointsAwarded, $needsManual) = self::gradeAnswer($question, $options, $userAnswerData);
-
-            // Update answer record
-            $upStmt = $db->prepare("
-                UPDATE attempt_answers 
-                SET is_correct = ?, points_awarded = ?, needs_manual_grading = ? 
-                WHERE id = ?
-            ");
-            $upStmt->execute([
-                $isCorrect === null ? null : ($isCorrect ? 1 : 0),
-                $pointsAwarded,
-                $needsManual ? 1 : 0,
-                $ans['id']
-            ]);
+            // Write results back to attempt_answers row
+            if ($ansRow) {
+                $upStmt = $db->prepare("
+                    UPDATE attempt_answers 
+                    SET is_correct = ?, points_awarded = ?, needs_manual_grading = ? 
+                    WHERE id = ?
+                ");
+                $upStmt->execute([
+                    $isCorrect === null ? null : ($isCorrect ? 1 : 0),
+                    $pointsAwarded,
+                    $needsManual ? 1 : 0,
+                    $ansRow['id']
+                ]);
+            } else {
+                $insStmt = $db->prepare("
+                    INSERT INTO attempt_answers (attempt_id, question_id, answer_data, is_correct, points_awarded, needs_manual_grading)
+                    VALUES (?, ?, NULL, ?, ?, ?)
+                ");
+                $insStmt->execute([
+                    $attemptId,
+                    $questionId,
+                    $isCorrect === null ? null : ($isCorrect ? 1 : 0),
+                    $pointsAwarded,
+                    $needsManual ? 1 : 0
+                ]);
+            }
 
             $totalPossiblePoints += floatval($question['points']);
             if ($needsManual) {
-                $hasEssay = true;
+                $hasUngradedEssay = true;
             } else {
-                $totalScore += floatval($pointsAwarded);
+                $totalPointsAwarded += floatval($pointsAwarded);
             }
         }
 
         // Calculate passing and update attempt status
-        $status = $hasEssay ? 'submitted' : 'graded';
-        $percentage = $totalPossiblePoints > 0 ? ($totalScore / $totalPossiblePoints) * 100 : 0.00;
+        $status = $hasUngradedEssay ? 'submitted' : 'graded';
+        $percentage = $totalPossiblePoints > 0 ? ($totalPointsAwarded / $totalPossiblePoints) * 100 : 0.00;
         $passed = ($percentage >= floatval($attempt['pass_percentage'])) ? 1 : 0;
 
         $upAttempt = $db->prepare("
             UPDATE exam_attempts 
-            SET score = ?, percentage = ?, passed = ?, status = ?, submitted_at = NOW() 
+            SET score = ?, percentage = ?, passed = ?, status = ?
             WHERE id = ?
         ");
         $upAttempt->execute([
-            $totalScore,
+            $totalPointsAwarded,
             $percentage,
             $passed,
             $status,
             $attemptId
         ]);
 
-        // Auto-complete quiz milestone on Learning Path if passed
+        // Auto-complete quiz milestone on Learning Path if passed and graded
         if ($passed && $status === 'graded') {
             self::checkAndCompleteQuizMilestone($attempt['user_id'], $attempt['exam_id']);
+        }
+
+        if ($status === 'graded') {
+            require_once __DIR__ . '/GradebookCalculator.php';
+            GradebookCalculator::recordQuizScore($attemptId);
         }
 
         return true;
@@ -212,61 +533,10 @@ class Grader {
 
     /**
      * Recalculates total score when an essay question gets graded manually.
+     * Delegates directly to the robust gradeAttempt logic to preserve correctness and clean updates.
      */
     public static function recalculateAttemptScore($attemptId) {
-        $db = Database::getInstance()->getConnection();
-
-        $stmt = $db->prepare("
-            SELECT ea.*, e.pass_percentage 
-            FROM exam_attempts ea 
-            JOIN exams e ON ea.exam_id = e.id 
-            WHERE ea.id = ?
-        ");
-        $stmt->execute([$attemptId]);
-        $attempt = $stmt->fetch();
-        if (!$attempt) return false;
-
-        // Check if there are any remaining essays needing manual grading
-        $stmt = $db->prepare("SELECT COUNT(*) as count FROM attempt_answers WHERE attempt_id = ? AND needs_manual_grading = 1");
-        $stmt->execute([$attemptId]);
-        $remainingCount = $stmt->fetch()['count'];
-
-        // Calculate sum of awarded points and sum of total points
-        $stmt = $db->prepare("
-            SELECT SUM(aa.points_awarded) as score, SUM(q.points) as total 
-            FROM attempt_answers aa
-            JOIN questions q ON aa.question_id = q.id
-            WHERE aa.attempt_id = ?
-        ");
-        $stmt->execute([$attemptId]);
-        $sums = $stmt->fetch();
-
-        $totalScore = floatval($sums['score'] ?? 0.00);
-        $totalPossible = floatval($sums['total'] ?? 1.00);
-
-        $percentage = $totalPossible > 0 ? ($totalScore / $totalPossible) * 100 : 0.00;
-        $passed = ($percentage >= floatval($attempt['pass_percentage'])) ? 1 : 0;
-        $status = ($remainingCount > 0) ? 'submitted' : 'graded';
-
-        $upAttempt = $db->prepare("
-            UPDATE exam_attempts 
-            SET score = ?, percentage = ?, passed = ?, status = ? 
-            WHERE id = ?
-        ");
-        $upAttempt->execute([
-            $totalScore,
-            $percentage,
-            $passed,
-            $status,
-            $attemptId
-        ]);
-
-        // Auto-complete quiz milestone on Learning Path if passed
-        if ($passed && $status === 'graded') {
-            self::checkAndCompleteQuizMilestone($attempt['user_id'], $attempt['exam_id']);
-        }
-
-        return true;
+        return self::gradeAttempt($attemptId);
     }
 
     /**
@@ -280,18 +550,17 @@ class Grader {
             SELECT lpi.id 
             FROM learning_path_items lpi
             JOIN course_enrollments ce ON lpi.course_id = ce.course_id
-            WHERE ce.student_id = ? AND lpi.type = 'quiz' AND lpi.item_id = ?
+            WHERE ce.student_id = ? AND lpi.item_type = 'quiz' AND lpi.item_id = ?
         ");
         $stmt->execute([$userId, $examId]);
         $lpItems = $stmt->fetchAll();
         
-        foreach ($lpItems as $lpItem) {
-            $stmtInsert = $db->prepare("
-                INSERT INTO learning_path_progress (user_id, learning_path_item_id, completed, completed_at)
-                VALUES (?, ?, 1, NOW())
-                ON DUPLICATE KEY UPDATE completed = 1, completed_at = NOW()
-            ");
-            $stmtInsert->execute([$userId, $lpItem['id']]);
+        if (!empty($lpItems)) {
+            require_once __DIR__ . '/../admin/models/LearningPathProgress.php';
+            $progressModel = new LearningPathProgress();
+            foreach ($lpItems as $lpItem) {
+                $progressModel->markComplete($userId, $lpItem['id']);
+            }
         }
     }
 }
