@@ -58,6 +58,25 @@ switch ($route) {
         break;
 
     // ---------------- ADMIN / INSTRUCTOR ROUTES ----------------
+    case 'admin/download_schema':
+        Auth::requireRole(['admin', 'instructor']);
+        $file = __DIR__ . '/sql/complete_schema.sql';
+        if (file_exists($file)) {
+            header('Content-Description: File Transfer');
+            header('Content-Type: application/sql');
+            header('Content-Disposition: attachment; filename="complete_schema.sql"');
+            header('Expires: 0');
+            header('Cache-Control: must-revalidate');
+            header('Pragma: public');
+            header('Content-Length: ' . filesize($file));
+            readfile($file);
+            exit;
+        } else {
+            http_response_code(404);
+            echo "Database schema file not found.";
+            exit;
+        }
+
     case 'admin/courses':
         require_once __DIR__ . '/testbank/admin/controllers/CourseController.php';
         $controller = new CourseController();
@@ -79,6 +98,20 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/links':
+        require_once __DIR__ . '/testbank/admin/controllers/LinkController.php';
+        $controller = new LinkController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
+    case 'admin/learning-path':
+        require_once __DIR__ . '/testbank/admin/controllers/LearningPathController.php';
+        $controller = new LearningPathController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/categories':
         require_once __DIR__ . '/testbank/admin/controllers/CategoryController.php';
         $controller = new CategoryController();
@@ -89,7 +122,14 @@ switch ($route) {
     case 'admin/questions':
         require_once __DIR__ . '/testbank/admin/controllers/QuestionController.php';
         $controller = new QuestionController();
-        $action = $_GET['action'] ?? 'index';
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
+    case 'admin/cases':
+        require_once __DIR__ . '/testbank/admin/controllers/CaseStudyController.php';
+        $controller = new CaseStudyController();
+        $action = $_GET['action'] ?? 'list';
         $controller->handleRequest($action);
         break;
 
@@ -116,14 +156,20 @@ switch ($route) {
 
     // ---------------- STUDENT ROUTES ----------------
     case 'student/course/view':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
-        $controller->handleRequest('course_view');
+        require_once __DIR__ . '/testbank/site/controllers/LearningPathController.php';
+        $controller = new LearningPathController();
+        $controller->handleRequest('view');
+        break;
+
+    case 'student/learning-path/access':
+        require_once __DIR__ . '/testbank/site/controllers/LearningPathController.php';
+        $controller = new LearningPathController();
+        $controller->handleRequest('access');
         break;
 
     case 'student/course/complete_lp_item':
-        require_once __DIR__ . '/testbank/admin/controllers/StudentController.php';
-        $controller = new StudentController();
+        require_once __DIR__ . '/testbank/site/controllers/LearningPathController.php';
+        $controller = new LearningPathController();
         $controller->handleRequest('complete_lp_item');
         break;
 

@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "php -S 0.0.0.0:3000",
+    "dev": "bash ./start_server.sh",
     "build": "echo 'No build step required for PHP'",
-    "start": "php -S 0.0.0.0:3000",
+    "start": "bash ./start_server.sh",
     "clean": "rm -rf dist",
     "lint": "echo 'Skipping TS lint for PHP stack'"
   },

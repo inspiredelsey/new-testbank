@@ -5,7 +5,7 @@
 
 return [
     'db' => [
-        'type' => 'mysql', // 'mysql' or 'sqlite'
+        'type' => 'sqlite', // 'mysql' or 'sqlite'
         'host' => 'localhost',
         'port' => '3306',
         'name' => 'testbank',

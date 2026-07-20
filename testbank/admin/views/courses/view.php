@@ -152,9 +152,14 @@ $activeTab = $_GET['tab'] ?? 'documents';
         <?php elseif ($activeTab === 'links'): ?>
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h5 class="fw-bold mb-0">External Resource Links</h5>
-                <button class="btn btn-sm btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addLinkModal">
-                    <i data-lucide="plus" size="14"></i> Add Link
-                </button>
+                <div class="d-flex gap-2">
+                    <a href="index.php?route=admin/links&action=list&course_id=<?php echo $course['id']; ?>" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1.5 font-sans fw-medium">
+                        <i data-lucide="settings" size="14"></i> Manage/Reorder
+                    </a>
+                    <button class="btn btn-sm btn-primary d-flex align-items-center gap-2 font-sans" data-bs-toggle="modal" data-bs-target="#addLinkModal">
+                        <i data-lucide="plus" size="14"></i> Add Link
+                    </button>
+                </div>
             </div>
             
             <?php if (empty($links)): ?>
@@ -180,6 +185,9 @@ $activeTab = $_GET['tab'] ?? 'documents';
                             <div class="d-flex gap-1">
                                 <a href="<?php echo htmlspecialchars($lnk['url']); ?>" target="_blank" class="btn btn-sm btn-light border" title="Go to Link">
                                     <i data-lucide="external-link" size="14"></i>
+                                </a>
+                                <a href="index.php?route=admin/links&action=edit&id=<?php echo $lnk['id']; ?>" class="btn btn-sm btn-light border" title="Edit">
+                                    <i data-lucide="edit-3" size="14"></i>
                                 </a>
                                 <a href="index.php?route=admin/courses&action=delete_link&id=<?php echo $lnk['id']; ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Delete this link?');" title="Delete">
                                     <i data-lucide="trash-2" size="14"></i>

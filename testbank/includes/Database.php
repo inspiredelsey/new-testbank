@@ -60,8 +60,84 @@ class Database {
             if (!$schemaExists) {
                 $this->initializeSQLiteSchema();
             }
+            $this->ensureSchemaUpdates();
         } catch (PDOException $e) {
             throw new Exception("Database connection failed: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Ensures all newer tables and optional/integrated columns exist in the active SQLite database.
+     */
+    private function ensureSchemaUpdates() {
+        // Ensure newer tables exist
+        $tables = [
+            "cases" => "CREATE TABLE IF NOT EXISTS cases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title VARCHAR(200) NOT NULL,
+                scenario_text TEXT NOT NULL,
+                category_id INT NOT NULL,
+                is_trend BOOLEAN DEFAULT 0,
+                created_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )",
+            "case_exhibits" => "CREATE TABLE IF NOT EXISTS case_exhibits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INT NOT NULL,
+                tab_label VARCHAR(100) NOT NULL,
+                content TEXT NOT NULL,
+                timestamp_label VARCHAR(50) NULL,
+                order_index INT DEFAULT 0,
+                FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
+            )",
+            "ngn_questions" => "CREATE TABLE IF NOT EXISTS ngn_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INT NOT NULL,
+                case_id INT NULL,
+                case_order INT NULL,
+                type VARCHAR(50) NOT NULL,
+                question_text TEXT NOT NULL,
+                question_data TEXT NOT NULL,
+                difficulty VARCHAR(20) NOT NULL,
+                points DECIMAL(6,2) DEFAULT 1.00,
+                scoring_method VARCHAR(30) DEFAULT 'all_or_nothing',
+                status VARCHAR(20) DEFAULT 'draft',
+                created_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+                FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE SET NULL,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+            )"
+        ];
+
+        foreach ($tables as $name => $createSql) {
+            try {
+                $this->pdo->exec($createSql);
+            } catch (PDOException $e) {
+                error_log("Failed to create table $name: " . $e->getMessage());
+            }
+        }
+
+        // Apply column additions (alters)
+        $alters = [
+            "ALTER TABLE cases ADD COLUMN created_by INTEGER",
+            "ALTER TABLE exams ADD COLUMN course_id INTEGER",
+            "ALTER TABLE questions ADD COLUMN case_id INTEGER",
+            "ALTER TABLE questions ADD COLUMN case_order INTEGER",
+            "ALTER TABLE courses ADD COLUMN category_id INTEGER",
+            "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
+            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00"
+        ];
+
+        foreach ($alters as $alter) {
+            try {
+                $this->pdo->exec($alter);
+            } catch (PDOException $e) {
+                // Ignore column already exists errors or table not found errors
+            }
         }
     }
 

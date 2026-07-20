@@ -373,8 +373,13 @@ $activeRoute = $_GET['route'] ?? '';
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $activeRoute === 'admin/questions' ? 'active' : ''; ?>" href="index.php?route=admin/questions">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/questions') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/questions">
                         <i data-lucide="help-circle"></i> Question Bank
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/cases') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/cases">
+                        <i data-lucide="folder-open"></i> Case Studies
                     </a>
                 </li>
                 <li class="nav-item">

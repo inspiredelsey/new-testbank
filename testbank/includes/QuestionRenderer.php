@@ -1,14 +1,343 @@
 <?php
 /**
- * Question Renderer class for outputting matching HTML per question type.
+ * Question Renderer - Test Bank LMS
+ * Handles rendering the interactive/preview templates for various question types,
+ * including NGN cases and standard items.
  */
 
 class QuestionRenderer {
-    
+
     /**
-     * Renders a question in taking-exam mode.
+     * Primary render method.
+     * If $options is null, it operates in admin/instructor authoring PREVIEW mode,
+     * utilizing $question['question_data'] array directly.
+     * Otherwise, it delegates to the student exam-taking interactive renderer.
      */
-    public static function render($question, $options, $userAnswer = null, $disabled = false) {
+    public static function render($question, $options = null, $userAnswer = null, $disabled = false) {
+        // Fallback/Delegation to student exam-taking view if options are provided externally
+        if ($options !== null) {
+            return self::renderStudentTaking($question, $options, $userAnswer, $disabled);
+        }
+
+        // Admin/Instructor Authoring Preview Mode
+        $type = $question['type'];
+        $qData = $question['question_data'] ?? [];
+
+        $html = "<div class='card border-0 shadow-sm rounded-3 overflow-hidden mb-3'>";
+        
+        // Header
+        $html .= "  <div class='card-header bg-light py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2'>";
+        $html .= "    <div class='d-flex align-items-center gap-2'>";
+        $html .= "      <span class='badge bg-primary text-white font-sans px-2.5 py-1.5' style='font-size: 0.75rem;'>" . self::getTypeLabel($type) . "</span>";
+        $html .= "      <span class='text-muted small font-sans'>(" . floatval($question['points'] ?? 1.00) . " pts)</span>";
+        $html .= "    </div>";
+        $difficultyClass = self::getDifficultyBadgeClass($question['difficulty'] ?? 'medium');
+        $html .= "    <span class='badge " . $difficultyClass . " font-sans text-capitalize'>" . htmlspecialchars($question['difficulty'] ?? 'medium') . "</span>";
+        $html .= "  </div>";
+
+        // Body
+        $html .= "  <div class='card-body p-4'>";
+        $html .= "    <div class='fs-5 fw-medium text-dark font-sans mb-4' style='white-space: pre-wrap;'>" . htmlspecialchars($question['question_text'] ?? '') . "</div>";
+        $html .= "    <div class='question-preview-content'>";
+
+        switch ($type) {
+            case 'mcq_single':
+            case 'mcq_multi_sata':
+                $opts = $qData['options'] ?? [];
+                $inputType = ($type === 'mcq_single') ? 'radio' : 'checkbox';
+                
+                $html .= "    <div class='d-flex flex-column gap-2'>";
+                foreach ($opts as $idx => $opt) {
+                    $isCorrect = !empty($opt['is_correct']);
+                    $bgClass = $isCorrect ? 'bg-success-subtle border-success-subtle text-success-emphasis' : 'bg-light border-light-subtle text-dark';
+                    $icon = $isCorrect ? '<i data-lucide="check-circle" class="text-success" size="18"></i>' : '<i data-lucide="circle" class="text-muted" size="18"></i>';
+                    
+                    $html .= "      <div class='p-3 rounded-3 border d-flex align-items-center justify-content-between gap-3 " . $bgClass . "'>";
+                    $html .= "        <div class='d-flex align-items-center gap-3'>";
+                    $html .= "          <input class='form-check-input mt-0' type='" . $inputType . "' disabled " . ($isCorrect ? 'checked' : '') . " style='pointer-events: none;'>";
+                    $html .= "          <span class='font-sans'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "        </div>";
+                    $html .= "        <div>" . $icon . "</div>";
+                    $html .= "      </div>";
+                }
+                $html .= "    </div>";
+                break;
+
+            case 'true_false':
+                $opts = $qData['options'] ?? [];
+                $html .= "    <div class='d-flex flex-column gap-2'>";
+                foreach ($opts as $opt) {
+                    $isCorrect = !empty($opt['is_correct']);
+                    $bgClass = $isCorrect ? 'bg-success-subtle border-success-subtle text-success-emphasis' : 'bg-light border-light-subtle text-dark';
+                    $icon = $isCorrect ? '<i data-lucide="check-circle" class="text-success" size="18"></i>' : '<i data-lucide="circle" class="text-muted" size="18"></i>';
+                    
+                    $html .= "      <div class='p-3 rounded-3 border d-flex align-items-center justify-content-between gap-3 " . $bgClass . "'>";
+                    $html .= "        <div class='d-flex align-items-center gap-3'>";
+                    $html .= "          <input class='form-check-input mt-0' type='radio' disabled " . ($isCorrect ? 'checked' : '') . " style='pointer-events: none;'>";
+                    $html .= "          <span class='font-sans fw-semibold'>" . htmlspecialchars($opt['text'] ?? '') . "</span>";
+                    $html .= "        </div>";
+                    $html .= "        <div>" . $icon . "</div>";
+                    $html .= "      </div>";
+                }
+                $html .= "    </div>";
+                break;
+
+            case 'matching':
+                $left = $qData['left'] ?? [];
+                $right = $qData['right'] ?? [];
+                $pairs = $qData['correct_pairs'] ?? [];
+
+                // Create helper map of right column items
+                $rightMap = [];
+                foreach ($right as $rItem) {
+                    $rightMap[$rItem['id']] = $rItem['text'];
+                }
+
+                // Create map of left -> right pairs
+                $pairMap = [];
+                foreach ($pairs as $p) {
+                    $pairMap[$p[0]] = $p[1];
+                }
+
+                $html .= "    <div class='table-responsive border rounded-3'>";
+                $html .= "      <table class='table table-hover align-middle mb-0 font-sans'>";
+                $html .= "        <thead class='table-light text-muted small uppercase'>";
+                $html .= "          <tr>";
+                $html .= "            <th style='width: 45%;'>Concept (Left Side)</th>";
+                $html .= "            <th style='width: 10%;' class='text-center'>Match</th>";
+                $html .= "            <th style='width: 45%;'>Correct Statement / Term (Right Side)</th>";
+                $html .= "          </tr>";
+                $html .= "        </thead>";
+                $html .= "        <tbody>";
+                
+                foreach ($left as $lItem) {
+                    $matchedRightId = $pairMap[$lItem['id']] ?? '';
+                    $matchedRightText = $rightMap[$matchedRightId] ?? '<span class="text-danger fw-semibold">(No Match Configured)</span>';
+                    
+                    $html .= "          <tr>";
+                    $html .= "            <td class='p-3 fw-medium text-dark'>" . htmlspecialchars($lItem['text'] ?? '') . "</td>";
+                    $html .= "            <td class='p-3 text-center'><i data-lucide=" . ($matchedRightId ? "'arrow-right'" : "'alert-triangle'") . " class='text-primary' size='18'></i></td>";
+                    $html .= "            <td class='p-3 bg-success-subtle text-success-emphasis fw-medium'>" . htmlspecialchars($matchedRightText) . "</td>";
+                    $html .= "          </tr>";
+                }
+
+                $html .= "        </tbody>";
+                $html .= "      </table>";
+                $html .= "    </div>";
+                break;
+
+            case 'matrix_single':
+            case 'matrix_multi':
+                $rows = $qData['rows'] ?? [];
+                $columns = $qData['columns'] ?? [];
+                $correct = $qData['correct'] ?? [];
+                $isMulti = ($type === 'matrix_multi');
+                $inputType = $isMulti ? 'checkbox' : 'radio';
+
+                $html .= "    <div class='table-responsive border rounded-3'>";
+                $html .= "      <table class='table table-bordered align-middle text-center mb-0 font-sans'>";
+                $html .= "        <thead class='table-light text-muted small uppercase'>";
+                $html .= "          <tr>";
+                $html .= "            <th class='text-start' style='width: 40%;'>Findings / Rows</th>";
+                foreach ($columns as $col) {
+                    $html .= "        <th>" . htmlspecialchars($col['label'] ?? '') . "</th>";
+                }
+                $html .= "          </tr>";
+                $html .= "        </thead>";
+                $html .= "        <tbody>";
+                foreach ($rows as $row) {
+                    $rowId = $row['id'] ?? '';
+                    $rowCorrectCols = $correct[$rowId] ?? [];
+                    $html .= "          <tr>";
+                    $html .= "            <td class='text-start fw-medium text-dark'>" . htmlspecialchars($row['label'] ?? '') . "</td>";
+                    foreach ($columns as $col) {
+                        $colId = $col['id'] ?? '';
+                        $isCellCorrect = in_array($colId, $rowCorrectCols);
+                        $cellBg = $isCellCorrect ? 'bg-success-subtle text-success-emphasis' : '';
+                        $html .= "          <td class='" . $cellBg . "'>";
+                        $inputName = "preview_matrix_" . htmlspecialchars($rowId);
+                        $html .= "            <input class='form-check-input mt-0' type='" . $inputType . "' name='" . $inputName . ($isMulti ? '[]' : '') . "' disabled " . ($isCellCorrect ? 'checked' : '') . " style='pointer-events: none; transform: scale(1.1);'>";
+                        $html .= "          </td>";
+                    }
+                    $html .= "          </tr>";
+                }
+                $html .= "        </tbody>";
+                $html .= "      </table>";
+                $html .= "    </div>";
+                break;
+
+            case 'cloze_dropdown':
+            case 'cloze_dragdrop':
+                $passage = $qData['passage'] ?? '';
+                $blanks = $qData['blanks'] ?? [];
+
+                $escapedPassage = htmlspecialchars($passage);
+
+                $blanksMap = [];
+                foreach ($blanks as $blank) {
+                    $blanksMap[$blank['id']] = $blank;
+                }
+
+                $renderedPassage = preg_replace_callback('/\{\{([^}]+)\}\}/', function($matches) use ($blanksMap, $type) {
+                    $blankId = trim($matches[1]);
+                    if (!isset($blanksMap[$blankId])) {
+                        return "<span class='badge bg-danger'>{{ " . htmlspecialchars($blankId) . " (Missing) }}</span>";
+                    }
+
+                    $blank = $blanksMap[$blankId];
+                    $correctVal = $blank['correct'] ?? '';
+                    $options = $blank['options'] ?? [];
+
+                    if ($type === 'cloze_dropdown') {
+                        $selectHtml = "<select class='form-select form-select-sm d-inline-block w-auto border-success text-success-emphasis fw-medium' disabled style='pointer-events: none; margin: 0 4px; background-color: var(--bs-success-bg-subtle, #d1e7dd);'>";
+                        foreach ($options as $opt) {
+                            $isCorrect = ($opt === $correctVal);
+                            $selectHtml .= "<option " . ($isCorrect ? 'selected' : '') . ">" . htmlspecialchars($opt) . "</option>";
+                        }
+                        $selectHtml .= "</select>";
+                        return $selectHtml;
+                    } else {
+                        // cloze_dragdrop
+                        return " <span class='badge bg-success-subtle border border-success text-success-emphasis px-2.5 py-1.5 font-sans fs-6 rounded-3 fw-semibold' style='margin: 0 4px; display: inline-flex; align-items: center; gap: 6px;'><i data-lucide='grip-vertical' class='text-success' style='width: 14px; height: 14px;'></i>" . htmlspecialchars($correctVal) . "</span> ";
+                    }
+                }, $escapedPassage);
+
+                $html .= "    <div class='p-3 bg-light rounded-3 font-sans border' style='line-height: 1.8; font-size: 1.1rem; white-space: pre-wrap;'>";
+                $html .= $renderedPassage;
+                $html .= "    </div>";
+
+                if ($type === 'cloze_dragdrop') {
+                    $html .= "    <div class='mt-4'>";
+                    $html .= "      <div class='text-muted small uppercase mb-2 font-sans fw-semibold' style='font-size: 0.75rem; letter-spacing: 0.5px;'>Draggable Option Pool (Correct highlighted):</div>";
+                    $html .= "      <div class='d-flex flex-wrap gap-2'>";
+                    foreach ($blanks as $blank) {
+                        $correctVal = $blank['correct'] ?? '';
+                        foreach ($blank['options'] ?? [] as $opt) {
+                            $isCorrect = ($opt === $correctVal);
+                            $bgClass = $isCorrect ? 'bg-success-subtle border-success text-success-emphasis fw-semibold' : 'bg-white border-light-subtle text-muted';
+                            $html .= "      <div class='px-3 py-2 rounded-3 border font-sans d-flex align-items-center gap-1.5 " . $bgClass . "' style='font-size: 0.95rem; cursor: default;'>";
+                            $html .= "        <i data-lucide='grip-horizontal' style='width: 14px; height: 14px;'></i>";
+                            $html .= "        <span>" . htmlspecialchars($opt) . "</span>";
+                            $html .= "      </div>";
+                        }
+                    }
+                    $html .= "      </div>";
+                    $html .= "    </div>";
+                }
+                break;
+
+            case 'drag_drop_ordered':
+                $items = $qData['items'] ?? [];
+                $correctOrder = $qData['correct_order'] ?? [];
+                $distractors = $qData['distractors'] ?? [];
+
+                $orderedItemsMap = [];
+                foreach ($items as $item) {
+                    $orderedItemsMap[$item['id']] = $item['text'];
+                }
+
+                $html .= "    <div class='mb-4'>";
+                $html .= "      <div class='text-muted small uppercase mb-2 font-sans fw-semibold' style='font-size: 0.75rem; letter-spacing: 0.5px;'>Correct Sequence (In Order):</div>";
+                $html .= "      <ol class='list-group list-group-numbered font-sans mb-3'>";
+                foreach ($correctOrder as $itemId) {
+                    $itemText = $orderedItemsMap[$itemId] ?? '(Unknown Item)';
+                    $html .= "    <li class='list-group-item d-flex align-items-center gap-2 border-success bg-success-subtle text-success-emphasis py-2.5 px-3 rounded-3 mb-2'>";
+                    $html .= "      <span class='fw-medium'>" . htmlspecialchars($itemText) . "</span>";
+                    $html .= "    </li>";
+                }
+                $html .= "      </ol>";
+                $html .= "    </div>";
+
+                if (!empty($distractors)) {
+                    $html .= "    <div class='mt-3'>";
+                    $html .= "      <div class='text-muted small uppercase mb-2 font-sans fw-semibold' style='font-size: 0.75rem; letter-spacing: 0.5px;'>Distractors (Optional Extra Items):</div>";
+                    $html .= "      <div class='d-flex flex-wrap gap-2'>";
+                    foreach ($distractors as $dist) {
+                        $html .= "    <div class='px-3 py-2 bg-light border text-muted rounded-3 font-sans d-flex align-items-center gap-1.5' style='font-size: 0.9rem;'>";
+                        $html .= "      <i data-lucide='ban' class='text-danger' style='width: 14px; height: 14px;'></i>";
+                        $html .= "      <span>" . htmlspecialchars($dist['text'] ?? '') . "</span>";
+                        $html .= "    </div>";
+                    }
+                    $html .= "      </div>";
+                    $html .= "    </div>";
+                }
+                break;
+
+            case 'highlight':
+                $passageHtml = $qData['passage_html'] ?? '';
+                $segments = $qData['segments'] ?? [];
+                $correctSegmentIds = $qData['correct_segment_ids'] ?? [];
+
+                $sanitizedPassage = strip_tags($passageHtml, '<em><strong><br>');
+
+                usort($segments, function($a, $b) {
+                    return strlen($b['text'] ?? '') - strlen($a['text'] ?? '');
+                });
+
+                $placeholders = [];
+                foreach ($segments as $seg) {
+                    $segId = $seg['id'] ?? '';
+                    $segText = $seg['text'] ?? '';
+                    if ($segText === '') continue;
+
+                    $isCorrect = in_array($segId, $correctSegmentIds);
+                    $badgeClass = $isCorrect 
+                        ? 'bg-success-subtle text-success-emphasis border-success fw-semibold' 
+                        : 'bg-secondary-subtle text-muted border-light-subtle';
+                    
+                    $icon = $isCorrect ? '<i data-lucide="check" class="text-success d-inline" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 2px;"></i>' : '';
+
+                    $wrappedHtml = "<span class='px-2 py-1 rounded-2 border d-inline-block " . $badgeClass . "' style='font-size: 0.95em; cursor: default; margin: 1px 0;'>$icon" . htmlspecialchars($segText) . "</span>";
+
+                    $placeholder = "##SEGMENT_" . $segId . "##";
+                    $placeholders[$placeholder] = $wrappedHtml;
+
+                    $sanitizedPassage = str_replace($segText, $placeholder, $sanitizedPassage);
+                }
+
+                foreach ($placeholders as $placeholder => $wrappedHtml) {
+                    $sanitizedPassage = str_replace($placeholder, $wrappedHtml, $sanitizedPassage);
+                }
+
+                $html .= "    <div class='p-4 bg-light rounded-3 font-sans border text-dark' style='line-height: 2.2; font-size: 1.1rem;'>";
+                $html .= $sanitizedPassage;
+                $html .= "    </div>";
+                $html .= "    <div class='mt-3 d-flex gap-4 text-muted small uppercase font-sans fw-semibold' style='font-size: 0.75rem; letter-spacing: 0.5px;'>";
+                $html .= "      <div class='d-flex align-items-center gap-1.5'><span class='d-inline-block' style='width: 12px; height: 12px; background-color: var(--bs-success-bg-subtle, #d1e7dd); border: 1px solid #198754; border-radius: 4px;'></span> Correct Segment</div>";
+                $html .= "      <div class='d-flex align-items-center gap-1.5'><span class='d-inline-block' style='width: 12px; height: 12px; background-color: var(--bs-secondary-bg-subtle, #e2e3e5); border: 1px solid #adb5bd; border-radius: 4px;'></span> Incorrect/Neutral Segment</div>";
+                $html .= "    </div>";
+                break;
+
+            // Extensible hooks for the remaining NGN types
+            case 'mcq_extended':
+            case 'bowtie':
+            case 'fill_blank_calc':
+            case 'essay':
+                $html .= "    <div class='alert alert-warning border-0 rounded-3 d-flex align-items-center gap-2 mb-0'>";
+                $html .= "      <i data-lucide='clock' size='18'></i>";
+                $html .= "      <div>";
+                $html .= "        <strong>" . self::getTypeLabel($type) . " Preview Placeholder</strong><br>";
+                $html .= "        <small class='text-muted'>This is one of the advanced NGN question types coming soon in future updates.</small>";
+                $html .= "      </div>";
+                $html .= "    </div>";
+                break;
+
+            default:
+                $html .= "    <div class='alert alert-secondary border-0 rounded-3 mb-0'>Unsupported question type.</div>";
+                break;
+        }
+
+        $html .= "    </div>";
+        $html .= "  </div>";
+        $html .= "</div>";
+
+        return $html;
+    }
+
+    /**
+     * Legacy/Student taking interactive rendering
+     */
+    private static function renderStudentTaking($question, $options, $userAnswer = null, $disabled = false) {
         $type = $question['type'];
         $html = "<div class='card mb-4 shadow-sm border-0 rounded-3 id-question-card-" . $question['id'] . "' id='question-card-" . $question['id'] . "'>";
         $html .= "  <div class='card-header bg-light d-flex justify-content-between align-items-center py-3 border-0'>";
@@ -25,7 +354,10 @@ class QuestionRenderer {
         
         $disableAttr = $disabled ? "disabled" : "";
 
-        switch ($type) {
+        // Standardize mcq_multi_sata to render exactly like old mcq_multi
+        $effectiveType = ($type === 'mcq_multi_sata') ? 'mcq_multi' : $type;
+
+        switch ($effectiveType) {
             case 'mcq_single':
                 foreach ($options as $opt) {
                     $checked = '';
@@ -82,11 +414,7 @@ class QuestionRenderer {
                 break;
                 
             case 'matching':
-                // For matching, $options contains the items. The left sides have option_text, the correct answers are pair_key.
-                // We should display left items in fixed order, and right options as a dropdown selector containing the available shuffled pair_keys!
                 $leftItems = $options;
-                
-                // Extract unique right sides (shuffled) for the dropdown list
                 $rightItems = array_map(function($o) { return $o['pair_key']; }, $options);
                 $rightItems = array_unique(array_filter($rightItems));
                 shuffle($rightItems);
@@ -159,7 +487,6 @@ class QuestionRenderer {
         $html .= "  </div>";
         $html .= "  <div class='card-body p-4 bg-white'>";
         
-        // Show correct/incorrect badges
         if (!$needsManual) {
             if ($isCorrect) {
                 $html .= "<div class='alert alert-success d-flex align-items-center gap-2 mb-4 py-2 border-0 rounded-3'><i class='lucide-check-circle-2'></i> <span>Correct Answer!</span></div>";
@@ -170,7 +497,9 @@ class QuestionRenderer {
         
         $html .= "    <div class='question-options-container'>";
         
-        switch ($type) {
+        $effectiveType = ($type === 'mcq_multi_sata') ? 'mcq_multi' : $type;
+
+        switch ($effectiveType) {
             case 'mcq_single':
                 foreach ($options as $opt) {
                     $checked = ($userAnswer == $opt['id'] || (is_array($userAnswer) && in_array($opt['id'], $userAnswer))) ? 'checked' : '';
@@ -209,7 +538,6 @@ class QuestionRenderer {
                 $trueChecked = ($userAnswer === 'true' || $userAnswer === true || $userAnswer === '1' || $userAnswer === 1) ? 'checked' : '';
                 $falseChecked = ($userAnswer === 'false' || $userAnswer === false || $userAnswer === '0' || $userAnswer === 0) ? 'checked' : '';
                 
-                // Find correct value
                 $correctVal = 'false';
                 foreach ($options as $opt) {
                     if ($opt['is_correct']) {
@@ -238,7 +566,6 @@ class QuestionRenderer {
                 break;
                 
             case 'fill_blank':
-                $correctAnswers = array_map(function($o) { return trim(strtolower($o['option_text'])); }, $options);
                 $html .= "
                 <div class='mb-3'>
                     <label class='form-label text-muted'>Your Answer:</label>
@@ -298,16 +625,26 @@ class QuestionRenderer {
         return $html;
     }
 
-    private static function getTypeLabel($type) {
+    public static function getTypeLabel($type) {
         $labels = [
             'mcq_single' => 'Multiple Choice (Single)',
+            'mcq_multi_sata' => 'Multiple Choice (SATA)',
             'mcq_multi' => 'Multiple Choice (Multiple)',
             'true_false' => 'True/False',
             'fill_blank' => 'Fill in the Blank',
             'matching' => 'Matching',
-            'essay' => 'Essay'
+            'essay' => 'Essay',
+            'mcq_extended' => 'Extended Multiple Choice',
+            'cloze_dropdown' => 'Cloze Dropdown',
+            'cloze_dragdrop' => 'Cloze Drag and Drop',
+            'drag_drop_ordered' => 'Drag and Drop Ordered',
+            'matrix_single' => 'Matrix Single Select',
+            'matrix_multi' => 'Matrix Multiple Select',
+            'highlight' => 'Highlight Select',
+            'bowtie' => 'Bowtie Scenario',
+            'fill_blank_calc' => 'Calculated Fill in the Blank'
         ];
-        return $labels[$type] ?? 'Question';
+        return $labels[$type] ?? ucfirst(str_replace('_', ' ', $type));
     }
 
     private static function getDifficultyBadgeClass($difficulty) {
