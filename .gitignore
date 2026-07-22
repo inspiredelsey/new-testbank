@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+*.sqlite
+testbank/config/config.php
+uploads/certificates/*.pdf
+uploads/documents/*
+!uploads/documents/.gitkeep
+

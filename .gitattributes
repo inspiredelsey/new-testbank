@@ -1,0 +1,5 @@
+*.sqlite diff=nodiff
+*.pdf diff=nodiff
+*.png diff=nodiff
+*.jpg diff=nodiff
+*.jpeg diff=nodiff

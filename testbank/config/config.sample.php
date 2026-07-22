@@ -6,8 +6,8 @@
 
 return [
     'db' => [
-        'type' => 'mysql', // 'mysql' or 'sqlite'
-        'host' => '127.0.0.1',
+        'type' => 'mysql', // 'mysql' or 'sqlite' - default is MySQL
+        'host' => '127.0.0.1', // CHANGE THESE FOR YOUR ENVIRONMENT
         'port' => '3306',
         'name' => 'testbank',
         'user' => 'root',

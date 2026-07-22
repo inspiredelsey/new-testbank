@@ -69,8 +69,9 @@ class AttemptModel {
 
         // Pre-initialize answers rows for each question
         $stmtAnsInit = $this->db->prepare("
-            INSERT OR IGNORE INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
+            INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
             VALUES (?, ?, NULL, 0)
+            ON DUPLICATE KEY UPDATE attempt_id = VALUES(attempt_id)
         ");
         foreach ($questionIds as $qId) {
             $stmtAnsInit->execute([$attemptId, $qId]);
@@ -185,25 +186,13 @@ class AttemptModel {
         $needsManualGrading = ($qType === 'essay') ? 1 : 0;
         $answerDataJson = json_encode($answerData);
 
-        // Standard select-then-insert/update to be fully DB engine independent
-        $stmtExist = $this->db->prepare("SELECT id FROM attempt_answers WHERE attempt_id = ? AND question_id = ?");
-        $stmtExist->execute([$attemptId, $questionId]);
-        $exists = $stmtExist->fetch();
-
-        if ($exists) {
-            $stmtUpdate = $this->db->prepare("
-                UPDATE attempt_answers
-                SET answer_data = ?, needs_manual_grading = ?
-                WHERE attempt_id = ? AND question_id = ?
-            ");
-            return $stmtUpdate->execute([$answerDataJson, $needsManualGrading, $attemptId, $questionId]);
-        } else {
-            $stmtInsert = $this->db->prepare("
-                INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
-                VALUES (?, ?, ?, ?)
-            ");
-            return $stmtInsert->execute([$attemptId, $questionId, $answerDataJson, $needsManualGrading]);
-        }
+        // Atomic MySQL upsert
+        $stmtUpsert = $this->db->prepare("
+            INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE answer_data = VALUES(answer_data), needs_manual_grading = VALUES(needs_manual_grading)
+        ");
+        return $stmtUpsert->execute([$attemptId, $questionId, $answerDataJson, $needsManualGrading]);
     }
 
     /**

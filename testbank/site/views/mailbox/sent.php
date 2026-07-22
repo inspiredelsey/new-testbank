@@ -82,7 +82,7 @@ include __DIR__ . '/../../../admin/views/layout_header.php';
                                                 <?php echo htmlspecialchars($m['subject']); ?>
                                             </div>
                                             <div class="text-muted fw-normal small text-truncate mt-1" style="max-width: 450px;">
-                                                <?php echo htmlspecialchars(mb_strimwidth(strip_tags($m['body']), 0, 90, '...')); ?>
+                                                <?php echo htmlspecialchars(safeTruncate(strip_tags($m['body']), 90, '...')); ?>
                                             </div>
                                         </a>
                                     </td>

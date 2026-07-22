@@ -19,19 +19,63 @@ class Database {
 
         if ($dbConfig['type'] === 'mysql') {
             try {
+                // First try connecting directly to the specified database
                 $dsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['name']};charset=utf8mb4";
                 $this->pdo = new PDO($dsn, $dbConfig['user'], $dbConfig['pass'], [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES => false,
                 ]);
+                $this->initializeMySQLSchema();
             } catch (PDOException $e) {
-                // Fall back to SQLite if MySQL fails
-                error_log("MySQL connection failed: " . $e->getMessage() . ". Falling back to SQLite.");
-                $this->setupSQLiteFallback();
+                // Try connecting to MySQL server root to create database if unknown database
+                try {
+                    $baseDsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};charset=utf8mb4";
+                    $basePdo = new PDO($baseDsn, $dbConfig['user'], $dbConfig['pass'], [
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_EMULATE_PREPARES => false,
+                    ]);
+                    $dbNameClean = str_replace('`', '``', $dbConfig['name']);
+                    $basePdo->exec("CREATE DATABASE IF NOT EXISTS `$dbNameClean` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+                    $basePdo->exec("USE `$dbNameClean`;");
+                    $this->pdo = $basePdo;
+                    $this->initializeMySQLSchema();
+                } catch (PDOException $e2) {
+                    // Fall back to SQLite with a clear, prominent warning message
+                    error_log("WARNING: MySQL connection failed (" . $e->getMessage() . "), running on temporary SQLite fallback — data will not persist correctly for production use");
+                    $this->setupSQLiteFallback();
+                }
             }
         } else {
             $this->setupSQLiteFallback();
+        }
+    }
+
+    /**
+     * Initializes MySQL database schema and default admin user if tables do not exist yet.
+     */
+    private function initializeMySQLSchema() {
+        try {
+            $stmt = $this->pdo->query("SHOW TABLES LIKE 'users'");
+            if (!$stmt->fetch()) {
+                $sqlPath = __DIR__ . '/../../sql/schema.sql';
+                if (file_exists($sqlPath)) {
+                    $sqlContent = file_get_contents($sqlPath);
+                    $this->pdo->exec($sqlContent);
+                }
+            }
+
+            // Seed default admin user if users table is empty
+            $checkUser = $this->pdo->query("SELECT COUNT(*) as cnt FROM users")->fetch();
+            if ($checkUser && intval($checkUser['cnt']) === 0) {
+                $adminEmail = $this->config['defaults']['admin_email'] ?? 'admin@testbank.com';
+                $adminPass = password_hash($this->config['defaults']['admin_password'] ?? 'admin123', PASSWORD_DEFAULT);
+                $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')");
+                $stmt->execute(['Administrator', $adminEmail, $adminPass]);
+            }
+        } catch (PDOException $e) {
+            error_log("initializeMySQLSchema warning: " . $e->getMessage());
         }
     }
 
@@ -238,8 +282,7 @@ class Database {
 
     private function initializeSQLiteSchema() {
         $files = [
-            __DIR__ . '/../../sql/schema.sql',
-            __DIR__ . '/../../sql/lms_additions.sql'
+            __DIR__ . '/../../sql/schema.sql'
         ];
 
         foreach ($files as $sqlPath) {

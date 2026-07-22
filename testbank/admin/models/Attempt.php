@@ -4,6 +4,8 @@
  */
 
 require_once __DIR__ . '/../../includes/Database.php';
+require_once __DIR__ . '/Exam.php';
+require_once __DIR__ . '/ExamQuestion.php';
 
 class Attempt {
     private $db;
@@ -81,7 +83,7 @@ class Attempt {
         $resolvedQuestionsJson = json_encode($questionIds);
 
         $stmt = $this->db->prepare("
-            INSERT INTO exam_attempts (exam_id, user_id, started_at, status, resolved_questions)
+            INSERT INTO exam_attempts (exam_id, user_id, started_at, status, resolved_question_ids)
             VALUES (?, ?, NOW(), 'in_progress', ?)
         ");
         $stmt->execute([$examId, $userId, $resolvedQuestionsJson]);

@@ -8,13 +8,18 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 try {
-    require_once __DIR__ . '/testbank/includes/Database.php';
+    require_once __DIR__ . '/../testbank/includes/Database.php';
     $db = Database::getInstance()->getConnection();
 
     echo "Starting Database Seeding...\n";
 
     // 1. Disable constraints to allow a clean purge
-    $db->exec("PRAGMA foreign_keys = OFF;");
+    $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+    if ($driver === 'sqlite') {
+        $db->exec("PRAGMA foreign_keys = OFF;");
+    } else {
+        $db->exec("SET FOREIGN_KEY_CHECKS = 0;");
+    }
 
     // Clean existing records (preserving main admin user ID = 1)
     $db->exec("DELETE FROM users WHERE id > 1;");
@@ -35,7 +40,11 @@ try {
     $db->exec("DELETE FROM exam_attempts;");
     $db->exec("DELETE FROM attempt_answers;");
 
-    $db->exec("PRAGMA foreign_keys = ON;");
+    if ($driver === 'sqlite') {
+        $db->exec("PRAGMA foreign_keys = ON;");
+    } else {
+        $db->exec("SET FOREIGN_KEY_CHECKS = 1;");
+    }
     echo "Purged existing test data successfully.\n";
 
     // ==========================================

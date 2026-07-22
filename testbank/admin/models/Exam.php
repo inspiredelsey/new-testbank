@@ -216,4 +216,13 @@ class Exam {
             throw $e;
         }
     }
+
+    /**
+     * Resolve question set for exam using ExamQuestion model
+     */
+    public function resolveQuestionSet($examId) {
+        require_once __DIR__ . '/ExamQuestion.php';
+        $eqModel = new ExamQuestion();
+        return $eqModel->resolveQuestionSet($examId);
+    }
 }

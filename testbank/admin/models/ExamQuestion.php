@@ -130,14 +130,14 @@ class ExamQuestion {
         $rules = $this->rulesForExam($examId);
         foreach ($rules as $rule) {
             $catId = intval($rule['category_id']);
-            $difficulty = $rule['difficulty'];
+            $difficulty = strtolower(trim($rule['difficulty'] ?? 'any'));
             $count = intval($rule['question_count']);
 
             // Fetch eligible published questions
             $query = "SELECT id FROM questions WHERE (category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?)) AND status = 'published'";
             $params = [$catId, $catId];
 
-            if ($difficulty !== 'any') {
+            if ($difficulty !== 'any' && !empty($difficulty)) {
                 $query .= " AND difficulty = ?";
                 $params[] = $difficulty;
             }
@@ -150,8 +150,8 @@ class ExamQuestion {
             }
 
             // SQLite RANDOM() vs MySQL RAND()
-            $isFallback = Database::getInstance()->isFallback();
-            $randFunc = $isFallback ? "RANDOM()" : "RAND()";
+            $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            $randFunc = ($driver === 'sqlite') ? "RANDOM()" : "RAND()";
             $query .= " ORDER BY " . $randFunc . " LIMIT " . $count;
 
             $stmt = $this->db->prepare($query);
@@ -163,7 +163,46 @@ class ExamQuestion {
             }
         }
 
+        // 3. Fallback: If no fixed questions or rules exist for this exam, pull available published questions automatically
+        if (empty($resolvedQuestionIds)) {
+            // Fetch exam category & course
+            $stmtExam = $this->db->prepare("SELECT category_id, course_id FROM exams WHERE id = ?");
+            $stmtExam->execute([$examId]);
+            $examInfo = $stmtExam->fetch(PDO::FETCH_ASSOC);
+
+            $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            $randFunc = ($driver === 'sqlite') ? "RANDOM()" : "RAND()";
+
+            if ($examInfo && !empty($examInfo['category_id'])) {
+                $catId = intval($examInfo['category_id']);
+                $stmtFallbackCat = $this->db->prepare("
+                    SELECT id FROM questions 
+                    WHERE (category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?)) 
+                    AND status = 'published'
+                    ORDER BY {$randFunc} LIMIT 10
+                ");
+                $stmtFallbackCat->execute([$catId, $catId]);
+                $fallbackIds = $stmtFallbackCat->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($fallbackIds as $fid) {
+                    $resolvedQuestionIds[] = intval($fid);
+                }
+            }
+
+            // If category fallback yielded nothing, pull published questions globally
+            if (empty($resolvedQuestionIds)) {
+                $stmtFallbackGlobal = $this->db->query("
+                    SELECT id FROM questions 
+                    WHERE status = 'published'
+                    ORDER BY {$randFunc} LIMIT 5
+                ");
+                $fallbackIds = $stmtFallbackGlobal->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($fallbackIds as $fid) {
+                    $resolvedQuestionIds[] = intval($fid);
+                }
+            }
+        }
+
         // Return array of unique question IDs
-        return $resolvedQuestionIds;
+        return array_values(array_unique($resolvedQuestionIds));
     }
 }

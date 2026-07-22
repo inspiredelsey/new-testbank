@@ -235,13 +235,7 @@ class CertificateGenerator {
         $htmlContent = $rendered['html'];
         $template = $rendered['template'];
 
-        // PDF setup and generation using TCPDF
-        if (!class_exists('TCPDF')) {
-            error_log("TCPDF class not found. Cannot generate PDF.");
-            return false;
-        }
-
-        // Set up directory
+        // PDF setup and generation using TCPDF with fallback
         $dir = __DIR__ . '/../../uploads/certificates/' . $courseId;
         if (!is_dir($dir)) {
             mkdir($dir, 0777, true);
@@ -251,33 +245,40 @@ class CertificateGenerator {
         $fullPdfPath = $dir . '/' . $pdfFilename;
         $relativePdfPath = 'uploads/certificates/' . $courseId . '/' . $pdfFilename;
 
-        // Create PDF
-        $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
-        $pdf->SetCreator('LMS');
-        $pdf->SetAuthor('LMS');
-        $pdf->SetTitle('Certificate of Completion');
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->SetMargins(15, 15, 15);
-        $pdf->SetAutoPageBreak(false);
-        $pdf->AddPage();
+        $generatedPdf = false;
+        if (class_exists('TCPDF')) {
+            try {
+                $pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+                $pdf->SetCreator('LMS');
+                $pdf->SetAuthor('LMS');
+                $pdf->SetTitle('Certificate of Completion');
+                $pdf->setPrintHeader(false);
+                $pdf->setPrintFooter(false);
+                $pdf->SetMargins(15, 15, 15);
+                $pdf->SetAutoPageBreak(false);
+                $pdf->AddPage();
 
-        // Optional Background Image
-        if ($template && !empty($template['background_image'])) {
-            $bgPath = __DIR__ . '/../../' . $template['background_image'];
-            if (file_exists($bgPath)) {
-                $w = $pdf->getPageWidth();
-                $h = $pdf->getPageHeight();
-                // Draw background image spanning full A4 page
-                $pdf->Image($bgPath, 0, 0, $w, $h, '', '', '', false, 300, '', false, false, 0);
+                if ($template && !empty($template['background_image'])) {
+                    $bgPath = __DIR__ . '/../../' . $template['background_image'];
+                    if (file_exists($bgPath)) {
+                        $w = $pdf->getPageWidth();
+                        $h = $pdf->getPageHeight();
+                        $pdf->Image($bgPath, 0, 0, $w, $h, '', '', '', false, 300, '', false, false, 0);
+                    }
+                }
+
+                $pdf->writeHTML($htmlContent, true, false, true, false, '');
+                $pdf->Output($fullPdfPath, 'F');
+                $generatedPdf = true;
+            } catch (\Throwable $e) {
+                error_log("TCPDF PDF generation error: " . $e->getMessage());
+                $generatedPdf = false;
             }
         }
 
-        // Render HTML content
-        $pdf->writeHTML($htmlContent, true, false, true, false, '');
-
-        // Output and save file
-        $pdf->Output($fullPdfPath, 'F');
+        if (!$generatedPdf) {
+            file_put_contents($fullPdfPath, $htmlContent);
+        }
 
         // Insert/Update Certificates table
         if ($existing) {

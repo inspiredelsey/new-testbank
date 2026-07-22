@@ -89,7 +89,8 @@ class StudentController {
                 }
 
                 // Retrieve the resolved static questions list
-                $resolvedQuestionIds = json_decode($attempt['resolved_questions'], true) ?: [];
+                $rawResolved = $attempt['resolved_question_ids'] ?? ($attempt['resolved_questions'] ?? '[]');
+                $resolvedQuestionIds = json_decode($rawResolved, true) ?: [];
                 $questions = [];
                 $savedAnswers = $this->attemptModel->getAnswers($attemptId);
 
@@ -176,7 +177,8 @@ class StudentController {
                 }
 
                 // Re-fetch resolved questions & responses
-                $resolvedQuestionIds = json_decode($attempt['resolved_questions'], true) ?: [];
+                $rawResolved = $attempt['resolved_question_ids'] ?? ($attempt['resolved_questions'] ?? '[]');
+                $resolvedQuestionIds = json_decode($rawResolved, true) ?: [];
                 $savedAnswers = $this->attemptModel->getAnswers($attemptId);
                 $questions = [];
 

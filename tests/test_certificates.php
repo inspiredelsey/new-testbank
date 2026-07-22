@@ -6,11 +6,12 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once __DIR__ . '/testbank/includes/Database.php';
-require_once __DIR__ . '/testbank/includes/GradebookCalculator.php';
-require_once __DIR__ . '/testbank/includes/CertificateGenerator.php';
-require_once __DIR__ . '/testbank/admin/models/GradebookItem.php';
-require_once __DIR__ . '/testbank/admin/models/CertificateTemplate.php';
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../testbank/includes/Database.php';
+require_once __DIR__ . '/../testbank/includes/GradebookCalculator.php';
+require_once __DIR__ . '/../testbank/includes/CertificateGenerator.php';
+require_once __DIR__ . '/../testbank/admin/models/GradebookItem.php';
+require_once __DIR__ . '/../testbank/admin/models/CertificateTemplate.php';
 
 try {
     $db = Database::getInstance()->getConnection();
@@ -133,7 +134,7 @@ try {
         echo "  - PDF Path: " . $cert['pdf_path'] . "\n";
 
         // Verify PDF file exists on disk
-        $fullPdfPath = __DIR__ . '/' . $cert['pdf_path'];
+        $fullPdfPath = __DIR__ . '/../' . $cert['pdf_path'];
         if (file_exists($fullPdfPath)) {
             echo "✅ Success: PDF file successfully saved to disk at " . $fullPdfPath . "\n";
 
