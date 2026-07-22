@@ -203,13 +203,18 @@ CREATE TABLE IF NOT EXISTS message_reads (
 -- Activity Logs table
 CREATE TABLE IF NOT EXISTS activity_log (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NULL,
-  action VARCHAR(255) NOT NULL,
-  details TEXT NULL,
-  ip_address VARCHAR(45) NULL,
+  user_id INT NOT NULL,
+  course_id INT NULL,
+  action VARCHAR(100) NOT NULL,
+  item_type VARCHAR(50) NULL,
+  item_id INT NULL,
+  meta JSON NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_activity_user (user_id)
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL,
+  INDEX idx_activity_user (user_id),
+  INDEX idx_activity_course (course_id),
+  INDEX idx_activity_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ALTER existing tables to support full integration:

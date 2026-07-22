@@ -161,10 +161,24 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/certificates':
+        require_once __DIR__ . '/testbank/admin/controllers/CertificateController.php';
+        $controller = new CertificateController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/users':
         require_once __DIR__ . '/testbank/admin/controllers/UserController.php';
         $controller = new UserController();
         $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
+    case 'admin/analytics':
+        require_once __DIR__ . '/testbank/admin/controllers/AnalyticsController.php';
+        $controller = new AnalyticsController();
+        $action = $_GET['action'] ?? 'dashboard';
         $controller->handleRequest($action);
         break;
 
@@ -233,6 +247,24 @@ switch ($route) {
         require_once __DIR__ . '/testbank/site/controllers/GradebookController.php';
         $controller = new GradebookController();
         $action = $_GET['action'] ?? 'mygrades';
+        $controller->handleRequest($action);
+        break;
+
+    case 'student/certificates':
+        require_once __DIR__ . '/testbank/site/controllers/CertificateController.php';
+        $controller = new CertificateController();
+        $action = $_GET['action'] ?? 'mycertificates';
+        $controller->handleRequest($action);
+        break;
+
+    // ---------------- MAILBOX ROUTES ----------------
+    case 'site/mailbox':
+    case 'mailbox':
+    case 'student/mailbox':
+    case 'admin/mailbox':
+        require_once __DIR__ . '/testbank/site/controllers/MailboxController.php';
+        $controller = new MailboxController();
+        $action = $_GET['action'] ?? 'inbox';
         $controller->handleRequest($action);
         break;
 

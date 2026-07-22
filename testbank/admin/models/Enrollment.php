@@ -116,6 +116,10 @@ class Enrollment {
                 VALUES (?, ?, ?, 'active')
             ");
             $success = $stmt->execute([$courseId, $userId, $groupId]);
+            if ($success) {
+                require_once __DIR__ . '/../../includes/ActivityLogger.php';
+                ActivityLogger::log($userId, 'course_enrolled', $courseId);
+            }
             return $success ? true : false;
         } catch (PDOException $e) {
             error_log("Enrollment::enrollUser error: " . $e->getMessage());

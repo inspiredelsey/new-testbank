@@ -201,6 +201,11 @@ class LearningPathProgress {
             $stmtUnlock->execute([$userId, $courseId, $learningPathItemId]);
 
             $this->db->commit();
+
+            // Log completion
+            require_once __DIR__ . '/../../includes/ActivityLogger.php';
+            ActivityLogger::log($userId, 'learning_path_item_completed', $courseId, 'learning_path_item', $learningPathItemId);
+
             return true;
         } catch (Exception $e) {
             if ($this->db->inTransaction()) {

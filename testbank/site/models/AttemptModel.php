@@ -76,6 +76,10 @@ class AttemptModel {
             $stmtAnsInit->execute([$attemptId, $qId]);
         }
 
+        // Log quiz started
+        require_once __DIR__ . '/../../includes/ActivityLogger.php';
+        ActivityLogger::log($userId, 'quiz_started', $exam['course_id'], 'exam', $examId);
+
         return $this->getAttempt($attemptId);
     }
 

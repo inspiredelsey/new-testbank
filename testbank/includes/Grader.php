@@ -413,7 +413,7 @@ class Grader {
 
         // Get attempt and exam details
         $stmt = $db->prepare("
-            SELECT ea.*, e.pass_percentage 
+            SELECT ea.*, e.pass_percentage, e.course_id
             FROM exam_attempts ea 
             JOIN exams e ON ea.exam_id = e.id 
             WHERE ea.id = ?
@@ -517,6 +517,17 @@ class Grader {
             $status,
             $attemptId
         ]);
+
+        // Log quiz submission
+        require_once __DIR__ . '/ActivityLogger.php';
+        ActivityLogger::log(
+            $attempt['user_id'], 
+            'quiz_submitted', 
+            $attempt['course_id'], 
+            'exam', 
+            $attempt['exam_id'], 
+            ['score' => floatval($totalPointsAwarded), 'percentage' => floatval($percentage)]
+        );
 
         // Auto-complete quiz milestone on Learning Path if passed and graded
         if ($passed && $status === 'graded') {

@@ -21,6 +21,10 @@ class Auth {
             Session::set('user_name', $user['name']);
             Session::set('user_email', $user['email']);
             Session::set('user_role', $user['role']);
+            
+            require_once __DIR__ . '/ActivityLogger.php';
+            ActivityLogger::log($user['id'], 'login');
+            
             return true;
         }
         return false;

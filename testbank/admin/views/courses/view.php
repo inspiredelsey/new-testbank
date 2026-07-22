@@ -102,6 +102,16 @@ $activeTab = $_GET['tab'] ?? 'documents';
                     <i data-lucide="users" size="16"></i> Enrollments
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link py-3 px-4 fw-medium d-flex align-items-center gap-2" href="index.php?route=admin/certificates&action=template&course_id=<?php echo $course['id']; ?>">
+                    <i data-lucide="award" size="16"></i> Certificate Template
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link py-3 px-4 fw-medium d-flex align-items-center gap-2" href="index.php?route=admin/certificates&action=list&course_id=<?php echo $course['id']; ?>">
+                    <i data-lucide="scroll" size="16"></i> Issued Certificates
+                </a>
+            </li>
         </ul>
     </div>
     

@@ -354,17 +354,51 @@ $activeRoute = $_GET['route'] ?? '';
             <span class="badge text-capitalize mt-1" style="background-color: var(--primary-indigo-subtle); color: var(--primary-indigo); border: 1px solid #e2e8f0;"><?php echo htmlspecialchars($currentUser['role']); ?></span>
         </div>
 
+        <?php
+        $mailboxUnreadCount = 0;
+        if (Auth::isLoggedIn()) {
+            require_once __DIR__ . '/../../site/models/Message.php';
+            $mailboxUnreadCount = Message::unreadCount($currentUser['id']);
+        }
+        ?>
+
         <ul class="nav flex-column mt-3 flex-grow-1">
             <?php if (strpos($activeRoute, 'student/') !== false || !Auth::isInstructor()): ?>
                 <li class="nav-item">
-                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/') !== false || empty($activeRoute)) ? 'active' : ''; ?>" href="index.php?route=student/dashboard">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/dashboard') !== false || empty($activeRoute)) ? 'active' : ''; ?>" href="index.php?route=student/dashboard">
                         <i data-lucide="book-open"></i> Student Portal
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/gradebook') !== false) ? 'active' : ''; ?>" href="index.php?route=student/gradebook">
+                        <i data-lucide="award"></i> My Grades
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'student/certificates') !== false) ? 'active' : ''; ?>" href="index.php?route=student/certificates">
+                        <i data-lucide="award"></i> My Certificates
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'mailbox') !== false) ? 'active' : ''; ?> d-flex align-items-center justify-content-between" href="index.php?route=site/mailbox">
+                        <span><i data-lucide="mail"></i> Mailbox</span>
+                        <?php if ($mailboxUnreadCount > 0): ?>
+                            <span class="badge bg-danger rounded-pill px-2 py-1" style="font-size: 0.7rem;"><?php echo $mailboxUnreadCount; ?></span>
+                        <?php endif; ?>
                     </a>
                 </li>
             <?php else: ?>
                 <li class="nav-item">
                     <a class="nav-link <?php echo (strpos($activeRoute, 'admin/courses') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/courses">
                         <i data-lucide="graduation-cap"></i> Courses
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'mailbox') !== false) ? 'active' : ''; ?> d-flex align-items-center justify-content-between" href="index.php?route=site/mailbox">
+                        <span><i data-lucide="mail"></i> Mailbox</span>
+                        <?php if ($mailboxUnreadCount > 0): ?>
+                            <span class="badge bg-danger rounded-pill px-2 py-1" style="font-size: 0.7rem;"><?php echo $mailboxUnreadCount; ?></span>
+                        <?php endif; ?>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -390,6 +424,21 @@ $activeRoute = $_GET['route'] ?? '';
                 <li class="nav-item">
                     <a class="nav-link <?php echo $activeRoute === 'admin/attempts' ? 'active' : ''; ?>" href="index.php?route=admin/attempts">
                         <i data-lucide="check-square"></i> Grading & Stats
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/gradebook') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/gradebook">
+                        <i data-lucide="grid"></i> Gradebooks
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/certificates') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/certificates">
+                        <i data-lucide="award"></i> Certificates
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/analytics') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/analytics">
+                        <i data-lucide="line-chart"></i> Tracking & Analytics
                     </a>
                 </li>
                 <li class="nav-item">

@@ -167,20 +167,32 @@ class GradebookCalculator {
         $stmtScoreCheck->execute([$gradebookItemId, $userId]);
         $existingScoreId = $stmtScoreCheck->fetchColumn();
         
+        $success = false;
         if ($existingScoreId) {
             $stmtUpdate = $db->prepare("
                 UPDATE gradebook_scores 
                 SET score = ?, recorded_at = CURRENT_TIMESTAMP 
                 WHERE id = ?
             ");
-            return $stmtUpdate->execute([$highestScore, $existingScoreId]);
+            $success = $stmtUpdate->execute([$highestScore, $existingScoreId]);
         } else {
             $stmtInsert = $db->prepare("
                 INSERT INTO gradebook_scores (gradebook_item_id, user_id, score) 
                 VALUES (?, ?, ?)
             ");
-            return $stmtInsert->execute([$gradebookItemId, $userId, $highestScore]);
+            $success = $stmtInsert->execute([$gradebookItemId, $userId, $highestScore]);
         }
+
+        if ($success) {
+            try {
+                require_once __DIR__ . '/CertificateGenerator.php';
+                CertificateGenerator::checkAndIssue($userId, $courseId);
+            } catch (Exception $e) {
+                error_log("Failed to check/issue certificate in recordQuizScore: " . $e->getMessage());
+            }
+        }
+
+        return $success;
     }
 
     /**

@@ -146,15 +146,18 @@ class LearningPathController {
         $this->learningPathProgressModel->markComplete($user['id'], $lpItemId);
 
         // 3. Resolve target resource URL and redirect the tab
+        require_once __DIR__ . '/../../includes/ActivityLogger.php';
         if ($targetItem['item_type'] === 'document') {
             $doc = $this->documentModel->find($targetItem['item_id']);
             if ($doc && !empty($doc['file_path'])) {
+                ActivityLogger::log($user['id'], 'document_viewed', $targetItem['course_id'], 'document', $targetItem['item_id']);
                 header("Location: " . $doc['file_path']);
                 exit;
             }
         } elseif ($targetItem['item_type'] === 'link') {
             $lnk = $this->linkModel->find($targetItem['item_id']);
             if ($lnk && !empty($lnk['url'])) {
+                ActivityLogger::log($user['id'], 'link_opened', $targetItem['course_id'], 'link', $targetItem['item_id']);
                 header("Location: " . $lnk['url']);
                 exit;
             }

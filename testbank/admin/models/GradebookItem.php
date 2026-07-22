@@ -186,20 +186,33 @@ class GradebookItem {
         $stmtCheck->execute([$gradebookItemId, $userId]);
         $existingId = $stmtCheck->fetchColumn();
 
+        $success = false;
         if ($existingId) {
             $stmtUpdate = $this->db->prepare("
                 UPDATE gradebook_scores 
                 SET score = ?, recorded_at = CURRENT_TIMESTAMP 
                 WHERE id = ?
             ");
-            return $stmtUpdate->execute([$score, $existingId]);
+            $success = $stmtUpdate->execute([$score, $existingId]);
         } else {
             $stmtInsert = $this->db->prepare("
                 INSERT INTO gradebook_scores (gradebook_item_id, user_id, score) 
                 VALUES (?, ?, ?)
             ");
-            return $stmtInsert->execute([$gradebookItemId, $userId, $score]);
+            $success = $stmtInsert->execute([$gradebookItemId, $userId, $score]);
         }
+
+        if ($success) {
+            try {
+                $courseId = $item['course_id'];
+                require_once __DIR__ . '/../../includes/CertificateGenerator.php';
+                CertificateGenerator::checkAndIssue($userId, $courseId);
+            } catch (Exception $e) {
+                error_log("Failed to check/issue certificate in addManualScore: " . $e->getMessage());
+            }
+        }
+
+        return $success;
     }
 
     /**

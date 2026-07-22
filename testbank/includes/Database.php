@@ -149,6 +149,40 @@ class Database {
                 UNIQUE (gradebook_item_id, user_id),
                 FOREIGN KEY (gradebook_item_id) REFERENCES gradebook_items(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )",
+            "activity_log" => "CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INT NOT NULL,
+                course_id INT NULL,
+                action VARCHAR(100) NOT NULL,
+                item_type VARCHAR(50) NULL,
+                item_id INT NULL,
+                meta TEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
+            )",
+            "messages" => "CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INT NOT NULL,
+                recipient_id INT NULL,
+                recipient_group_id INT NULL,
+                course_id INT NULL,
+                subject VARCHAR(200) NOT NULL,
+                body TEXT NOT NULL,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
+            )",
+            "message_reads" => "CREATE TABLE IF NOT EXISTS message_reads (
+                message_id INT NOT NULL,
+                user_id INT NOT NULL,
+                read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (message_id, user_id),
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )"
         ];
 
@@ -171,7 +205,26 @@ class Database {
             "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
             "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00",
             "ALTER TABLE exam_attempts ADD COLUMN resolved_question_ids TEXT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_question_unique ON attempt_answers (attempt_id, question_id)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_question_unique ON attempt_answers (attempt_id, question_id)",
+            "ALTER TABLE certificate_templates ADD COLUMN html_template TEXT",
+            "ALTER TABLE certificate_templates ADD COLUMN background_image VARCHAR(255)",
+            "ALTER TABLE certificates ADD COLUMN user_id INTEGER",
+            "ALTER TABLE certificates ADD COLUMN certificate_number VARCHAR(100)",
+            "ALTER TABLE certificates ADD COLUMN pdf_path VARCHAR(255)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_course_student ON certificates (course_id, student_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_course_user ON certificates (course_id, user_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_number ON certificates (certificate_number)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_template_course_uniq ON certificate_templates (course_id)",
+            "ALTER TABLE activity_log ADD COLUMN course_id INTEGER",
+            "ALTER TABLE activity_log ADD COLUMN item_type VARCHAR(50)",
+            "ALTER TABLE activity_log ADD COLUMN item_id INTEGER",
+            "ALTER TABLE activity_log ADD COLUMN meta TEXT",
+            "ALTER TABLE messages ADD COLUMN recipient_id INTEGER",
+            "ALTER TABLE messages ADD COLUMN recipient_group_id INTEGER",
+            "ALTER TABLE messages ADD COLUMN course_id INTEGER",
+            "ALTER TABLE messages ADD COLUMN subject VARCHAR(200)",
+            "ALTER TABLE messages ADD COLUMN body TEXT",
+            "ALTER TABLE messages ADD COLUMN sent_at TIMESTAMP"
         ];
 
         foreach ($alters as $alter) {

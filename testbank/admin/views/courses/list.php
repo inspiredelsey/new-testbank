@@ -167,6 +167,16 @@ include __DIR__ . '/../layout_header.php';
                                                                 <i data-lucide="edit-3" size="14" class="text-muted"></i> Edit Details
                                                             </a>
                                                         </li>
+                                                        <li>
+                                                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="index.php?route=admin/certificates&action=template&course_id=<?php echo $c['id']; ?>">
+                                                                <i data-lucide="award" size="14" class="text-muted"></i> Certificate Template
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="index.php?route=admin/certificates&action=list&course_id=<?php echo $c['id']; ?>">
+                                                                <i data-lucide="scroll" size="14" class="text-muted"></i> Issued Certificates
+                                                            </a>
+                                                        </li>
                                                         <li><hr class="dropdown-divider"></li>
                                                         <li>
                                                             <a class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger" 
