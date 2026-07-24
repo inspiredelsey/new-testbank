@@ -10,75 +10,8 @@ class CaseStudy {
     private $db;
 
     public function __construct() {
+        // Tables are created once from the canonical /sql/schema.sql — no per-request schema checks here.
         $this->db = Database::getInstance()->getConnection();
-        $this->ensureTablesExist();
-    }
-
-    /**
-     * Ensures required tables for cases and case_exhibits exist in the active database.
-     */
-    private function ensureTablesExist() {
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-
-        try {
-            if ($driver === 'sqlite') {
-                $this->db->exec("CREATE TABLE IF NOT EXISTS cases (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title VARCHAR(200) NOT NULL,
-                    scenario_text TEXT NOT NULL,
-                    category_id INT NOT NULL,
-                    is_trend BOOLEAN DEFAULT 0,
-                    created_by INT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-                )");
-
-                $this->db->exec("CREATE TABLE IF NOT EXISTS case_exhibits (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    case_id INT NOT NULL,
-                    tab_label VARCHAR(100) NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp_label VARCHAR(50) NULL,
-                    order_index INT DEFAULT 0,
-                    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
-                )");
-
-                try {
-                    $this->db->exec("ALTER TABLE cases ADD COLUMN created_by INT NULL");
-                } catch (PDOException $e) {
-                    // Ignore if column already exists
-                }
-            } else {
-                $this->db->exec("CREATE TABLE IF NOT EXISTS cases (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    title VARCHAR(200) NOT NULL,
-                    scenario_text TEXT NOT NULL,
-                    category_id INT NOT NULL,
-                    is_trend BOOLEAN DEFAULT FALSE,
-                    created_by INT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
-                    INDEX idx_case_category (category_id),
-                    INDEX idx_case_creator (created_by)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-                $this->db->exec("CREATE TABLE IF NOT EXISTS case_exhibits (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    case_id INT NOT NULL,
-                    tab_label VARCHAR(100) NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp_label VARCHAR(50) NULL,
-                    order_index INT DEFAULT 0,
-                    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
-                    INDEX idx_exhibit_case (case_id),
-                    INDEX idx_exhibit_order (order_index)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-            }
-        } catch (PDOException $e) {
-            error_log("Error ensuring CaseStudy tables exist: " . $e->getMessage());
-        }
     }
 
     /**

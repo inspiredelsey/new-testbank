@@ -379,7 +379,6 @@ CREATE TABLE certificate_templates (
   id INT AUTO_INCREMENT PRIMARY KEY,
   course_id INT NOT NULL,
   title VARCHAR(255) NOT NULL,
-  content TEXT NULL,
   html_template TEXT NULL,
   background_image VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -391,18 +390,16 @@ CREATE TABLE certificate_templates (
 CREATE TABLE certificates (
   id INT AUTO_INCREMENT PRIMARY KEY,
   course_id INT NOT NULL,
-  student_id INT NULL,
-  user_id INT NULL,
+  user_id INT NOT NULL,
   certificate_number VARCHAR(100) NULL,
-  certificate_code VARCHAR(100) NULL,
   pdf_path VARCHAR(255) NULL,
   issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-  FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   UNIQUE KEY idx_cert_number (certificate_number),
+  UNIQUE KEY idx_cert_course_user (course_id, user_id),
   INDEX idx_cert_course (course_id),
-  INDEX idx_cert_student (student_id)
+  INDEX idx_cert_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 26. Messages table

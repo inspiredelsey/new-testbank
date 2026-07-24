@@ -272,7 +272,7 @@ function toggleTypeEditor(type) {
         document.getElementById('essay-editor-section').classList.remove('d-none');
     }
     
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 
 // MCQ options handlers
@@ -298,7 +298,7 @@ function addOptionRow() {
     `;
     container.appendChild(row);
     mcqIndex++;
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 function removeOptionRow(btn) {
     const rows = document.querySelectorAll('.option-row');
@@ -323,7 +323,7 @@ function addBlankRow() {
         </div>
     `;
     container.appendChild(row);
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 function removeBlankRow(btn) {
     btn.closest('.row').remove();
@@ -349,7 +349,7 @@ function addMatchingRow() {
         </div>
     `;
     container.appendChild(row);
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 function removeMatchingRow(btn) {
     btn.closest('.matching-row').remove();

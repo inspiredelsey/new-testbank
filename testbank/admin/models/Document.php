@@ -10,44 +10,8 @@ class Document {
     private $db;
 
     public function __construct() {
+        // Table is created once from the canonical /sql/schema.sql — no per-request schema checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Dynamic resilient schema check/creation to ensure documents table always exists
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $query = "CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                course_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                file_path TEXT NOT NULL,
-                file_type TEXT NOT NULL,
-                description TEXT,
-                status TEXT DEFAULT 'published',
-                order_index INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-            )";
-        } else {
-            $query = "CREATE TABLE IF NOT EXISTS documents (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                course_id INT NOT NULL,
-                title VARCHAR(200) NOT NULL,
-                file_path VARCHAR(255) NOT NULL,
-                file_type VARCHAR(50) NOT NULL,
-                description TEXT NULL,
-                status VARCHAR(50) DEFAULT 'published',
-                order_index INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                INDEX idx_document_course (course_id),
-                INDEX idx_document_order (order_index)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        }
-        try {
-            @$this->db->exec($query);
-        } catch (Exception $e) {
-            error_log("Document::__construct schema init warning: " . $e->getMessage());
-        }
     }
 
     /**

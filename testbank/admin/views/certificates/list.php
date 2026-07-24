@@ -110,7 +110,7 @@ include __DIR__ . '/../layout_header.php';
                                         </td>
                                         <td>
                                             <code class="font-mono text-dark fw-medium" style="font-size: 13px;">
-                                                <?php echo htmlspecialchars($c['certificate_number'] ?: $c['certificate_code']); ?>
+                                                <?php echo htmlspecialchars($c['certificate_number']); ?>
                                             </code>
                                         </td>
                                         <td>
@@ -127,7 +127,7 @@ include __DIR__ . '/../layout_header.php';
                                                 <form action="index.php?route=admin/certificates&action=regenerate" method="POST" class="d-inline-block m-0 p-0">
                                                     <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                                     <input type="hidden" name="course_id" value="<?php echo $course['id']; ?>">
-                                                    <input type="hidden" name="user_id" value="<?php echo $c['student_id'] ?: $c['user_id']; ?>">
+                                                    <input type="hidden" name="user_id" value="<?php echo $c['user_id']; ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1" onclick="return confirm('Are you sure you want to regenerate this certificate? It will overwrite the existing PDF file with updated template designs, while preserving the certificate code.');">
                                                         <i data-lucide="refresh-cw" size="14"></i> Regenerate
                                                     </button>

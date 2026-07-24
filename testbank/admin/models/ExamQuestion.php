@@ -13,6 +13,39 @@ class ExamQuestion {
     }
 
     /**
+     * Resolves a category id plus ALL of its descendants (children, grandchildren, etc.),
+     * not just direct children. Used so random-pull exam rules find questions filed
+     * anywhere in the category's subtree, however deeply nested.
+     * Guards against a runaway loop (e.g. bad circular data) with a max-depth cap.
+     *
+     * @param int $categoryId
+     * @return array of int category ids, including $categoryId itself
+     */
+    private function getDescendantCategoryIds($categoryId) {
+        $ids = [intval($categoryId)];
+        $frontier = [intval($categoryId)];
+        $maxDepth = 20;
+        $depth = 0;
+
+        while (!empty($frontier) && $depth < $maxDepth) {
+            $placeholders = implode(',', array_fill(0, count($frontier), '?'));
+            $stmt = $this->db->prepare("SELECT id FROM categories WHERE parent_id IN ($placeholders)");
+            $stmt->execute($frontier);
+            $children = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $newIds = array_diff(array_map('intval', $children), $ids);
+            if (empty($newIds)) {
+                break;
+            }
+            $ids = array_merge($ids, $newIds);
+            $frontier = array_values($newIds);
+            $depth++;
+        }
+
+        return $ids;
+    }
+
+    /**
      * Get fixed-pick questions for an exam, ordered
      */
     public function forExam($examId) {
@@ -133,9 +166,11 @@ class ExamQuestion {
             $difficulty = strtolower(trim($rule['difficulty'] ?? 'any'));
             $count = intval($rule['question_count']);
 
-            // Fetch eligible published questions
-            $query = "SELECT id FROM questions WHERE (category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?)) AND status = 'published'";
-            $params = [$catId, $catId];
+            // Match the target category AND its full subtree (all descendant levels), not just direct children.
+            $categoryIds = $this->getDescendantCategoryIds($catId);
+            $catPlaceholders = implode(',', array_fill(0, count($categoryIds), '?'));
+            $query = "SELECT id FROM questions WHERE category_id IN ($catPlaceholders) AND status = 'published'";
+            $params = $categoryIds;
 
             if ($difficulty !== 'any' && !empty($difficulty)) {
                 $query .= " AND difficulty = ?";
@@ -149,10 +184,7 @@ class ExamQuestion {
                 $params = array_merge($params, $resolvedQuestionIds);
             }
 
-            // SQLite RANDOM() vs MySQL RAND()
-            $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-            $randFunc = ($driver === 'sqlite') ? "RANDOM()" : "RAND()";
-            $query .= " ORDER BY " . $randFunc . " LIMIT " . $count;
+            $query .= " ORDER BY RAND() LIMIT " . $count;
 
             $stmt = $this->db->prepare($query);
             $stmt->execute($params);
@@ -170,18 +202,17 @@ class ExamQuestion {
             $stmtExam->execute([$examId]);
             $examInfo = $stmtExam->fetch(PDO::FETCH_ASSOC);
 
-            $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-            $randFunc = ($driver === 'sqlite') ? "RANDOM()" : "RAND()";
-
             if ($examInfo && !empty($examInfo['category_id'])) {
                 $catId = intval($examInfo['category_id']);
+                $categoryIds = $this->getDescendantCategoryIds($catId);
+                $catPlaceholders = implode(',', array_fill(0, count($categoryIds), '?'));
                 $stmtFallbackCat = $this->db->prepare("
                     SELECT id FROM questions 
-                    WHERE (category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?)) 
+                    WHERE category_id IN ($catPlaceholders)
                     AND status = 'published'
-                    ORDER BY {$randFunc} LIMIT 10
+                    ORDER BY RAND() LIMIT 10
                 ");
-                $stmtFallbackCat->execute([$catId, $catId]);
+                $stmtFallbackCat->execute($categoryIds);
                 $fallbackIds = $stmtFallbackCat->fetchAll(PDO::FETCH_COLUMN);
                 foreach ($fallbackIds as $fid) {
                     $resolvedQuestionIds[] = intval($fid);
@@ -193,7 +224,7 @@ class ExamQuestion {
                 $stmtFallbackGlobal = $this->db->query("
                     SELECT id FROM questions 
                     WHERE status = 'published'
-                    ORDER BY {$randFunc} LIMIT 5
+                    ORDER BY RAND() LIMIT 5
                 ");
                 $fallbackIds = $stmtFallbackGlobal->fetchAll(PDO::FETCH_COLUMN);
                 foreach ($fallbackIds as $fid) {

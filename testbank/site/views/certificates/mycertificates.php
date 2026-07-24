@@ -52,7 +52,7 @@ include __DIR__ . '/../../../admin/views/layout_header.php';
                                         </td>
                                         <td>
                                             <code class="font-mono text-dark fw-medium" style="font-size: 13px;">
-                                                <?php echo htmlspecialchars($c['certificate_number'] ?: $c['certificate_code']); ?>
+                                                <?php echo htmlspecialchars($c['certificate_number']); ?>
                                             </code>
                                         </td>
                                         <td>

@@ -166,7 +166,7 @@ class CertificateController {
         $stmt = $db->prepare("
             SELECT c.*, u.name as student_name, u.email as student_email
             FROM certificates c
-            JOIN users u ON (c.student_id = u.id OR c.user_id = u.id)
+            JOIN users u ON c.user_id = u.id
             WHERE c.course_id = ?
             ORDER BY c.issued_at DESC
         ");

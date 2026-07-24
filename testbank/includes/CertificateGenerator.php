@@ -45,8 +45,8 @@ class CertificateGenerator {
         $db = Database::getInstance()->getConnection();
 
         // 1. Check if a certificate already exists for this user+course
-        $stmtCheck = $db->prepare("SELECT id FROM certificates WHERE course_id = ? AND (student_id = ? OR user_id = ?)");
-        $stmtCheck->execute([$courseId, $userId, $userId]);
+        $stmtCheck = $db->prepare("SELECT id FROM certificates WHERE course_id = ? AND user_id = ?");
+        $stmtCheck->execute([$courseId, $userId]);
         $existingId = $stmtCheck->fetchColumn();
 
         if ($existingId) {
@@ -94,8 +94,8 @@ class CertificateGenerator {
         $template = $stmtTemplate->fetch();
 
         $htmlContent = null;
-        if ($template) {
-            $htmlContent = !empty($template['html_template']) ? $template['html_template'] : (!empty($template['content']) ? $template['content'] : null);
+        if ($template && !empty($template['html_template'])) {
+            $htmlContent = $template['html_template'];
         }
 
         if (!$htmlContent) {
@@ -214,13 +214,13 @@ class CertificateGenerator {
         $certificateNumber = 'CERT-' . str_pad($courseId, 3, '0', STR_PAD_LEFT) . '-' . str_pad($userId, 4, '0', STR_PAD_LEFT) . '-' . strtoupper(bin2hex(random_bytes(4)));
 
         // Check if certificate already exists
-        $stmtCheck = $db->prepare("SELECT * FROM certificates WHERE course_id = ? AND (student_id = ? OR user_id = ?)");
-        $stmtCheck->execute([$courseId, $userId, $userId]);
+        $stmtCheck = $db->prepare("SELECT * FROM certificates WHERE course_id = ? AND user_id = ?");
+        $stmtCheck->execute([$courseId, $userId]);
         $existing = $stmtCheck->fetch();
 
         if ($existing) {
             // Keep the old certificate number when regenerating
-            $certificateNumber = $existing['certificate_number'] ?: $existing['certificate_code'] ?: $certificateNumber;
+            $certificateNumber = $existing['certificate_number'] ?: $certificateNumber;
         }
 
         $tokenValues = [
@@ -284,31 +284,27 @@ class CertificateGenerator {
         if ($existing) {
             $stmtUpdate = $db->prepare("
                 UPDATE certificates 
-                SET pdf_path = ?, issued_at = CURRENT_TIMESTAMP, certificate_number = ?, certificate_code = ?
+                SET pdf_path = ?, issued_at = CURRENT_TIMESTAMP, certificate_number = ?
                 WHERE id = ?
             ");
-            $stmtUpdate->execute([$relativePdfPath, $certificateNumber, $certificateNumber, $existing['id']]);
+            $stmtUpdate->execute([$relativePdfPath, $certificateNumber, $existing['id']]);
 
             return [
                 'id' => $existing['id'],
                 'course_id' => $courseId,
-                'student_id' => $userId,
                 'user_id' => $userId,
-                'certificate_code' => $certificateNumber,
                 'certificate_number' => $certificateNumber,
                 'pdf_path' => $relativePdfPath,
                 'issued_at' => date('Y-m-d H:i:s')
             ];
         } else {
             $stmtInsert = $db->prepare("
-                INSERT INTO certificates (course_id, student_id, user_id, certificate_code, certificate_number, pdf_path, issued_at)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO certificates (course_id, user_id, certificate_number, pdf_path, issued_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
             ");
             $stmtInsert->execute([
                 $courseId,
                 $userId,
-                $userId,
-                $certificateNumber,
                 $certificateNumber,
                 $relativePdfPath
             ]);
@@ -317,9 +313,7 @@ class CertificateGenerator {
             return [
                 'id' => $insertId,
                 'course_id' => $courseId,
-                'student_id' => $userId,
                 'user_id' => $userId,
-                'certificate_code' => $certificateNumber,
                 'certificate_number' => $certificateNumber,
                 'pdf_path' => $relativePdfPath,
                 'issued_at' => date('Y-m-d H:i:s')

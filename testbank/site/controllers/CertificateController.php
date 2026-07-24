@@ -43,10 +43,10 @@ class CertificateController {
             SELECT c.*, co.title as course_title
             FROM certificates c
             JOIN courses co ON c.course_id = co.id
-            WHERE c.student_id = ? OR c.user_id = ?
+            WHERE c.user_id = ?
             ORDER BY c.issued_at DESC
         ");
-        $stmt->execute([$user['id'], $user['id']]);
+        $stmt->execute([$user['id']]);
         $certificates = $stmt->fetchAll() ?: [];
 
         include __DIR__ . '/../views/certificates/mycertificates.php';
@@ -71,7 +71,7 @@ class CertificateController {
         }
 
         // Verify ownership: must belong to the logged-in student
-        if ((int)$cert['student_id'] !== (int)$user['id'] && (int)$cert['user_id'] !== (int)$user['id']) {
+        if ((int)$cert['user_id'] !== (int)$user['id']) {
             http_response_code(403);
             echo "Access Denied: You do not have permission to view or download this certificate.";
             exit;

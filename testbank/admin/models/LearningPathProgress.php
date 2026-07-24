@@ -10,45 +10,8 @@ class LearningPathProgress {
     private $db;
 
     public function __construct() {
+        // Table is created once from the canonical /sql/schema.sql — no per-request schema checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Dynamic resilient schema check/creation for learning_path_progress table
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $queryProgress = "CREATE TABLE IF NOT EXISTS learning_path_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                course_id INTEGER NOT NULL,
-                learning_path_item_id INTEGER NOT NULL,
-                status TEXT DEFAULT 'locked',
-                completed_at TIMESTAMP DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                FOREIGN KEY (learning_path_item_id) REFERENCES learning_path_items(id) ON DELETE CASCADE,
-                UNIQUE(user_id, learning_path_item_id)
-            )";
-        } else {
-            $queryProgress = "CREATE TABLE IF NOT EXISTS learning_path_progress (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                course_id INT NOT NULL,
-                learning_path_item_id INT NOT NULL,
-                status ENUM('locked', 'unlocked', 'in_progress', 'completed') DEFAULT 'locked',
-                completed_at TIMESTAMP NULL DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                FOREIGN KEY (learning_path_item_id) REFERENCES learning_path_items(id) ON DELETE CASCADE,
-                UNIQUE KEY uniq_user_lpi (user_id, learning_path_item_id),
-                INDEX idx_lpp_user_course (user_id, course_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        }
-        try {
-            @$this->db->exec($queryProgress);
-        } catch (Exception $e) {
-            error_log("LearningPathProgress::__construct schema init warning: " . $e->getMessage());
-        }
     }
 
     /**

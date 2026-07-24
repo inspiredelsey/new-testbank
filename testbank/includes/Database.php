@@ -1,13 +1,22 @@
 <?php
 /**
  * Database Connection Singleton
+ *
+ * Production path: MySQL, using /sql/schema.sql directly (the single source of truth).
+ *
+ * Local/dev fallback: if MySQL can't be reached (e.g. previewing inside Google AI Studio,
+ * which has no MySQL server available), this falls back to a local SQLite file — but it
+ * is NOT a second hand-maintained schema. It parses the exact same /sql/schema.sql and
+ * converts it to SQLite-compatible syntax on the fly, so there is still only one place
+ * the schema is defined. This fallback is loud (logs a clear warning) rather than silent,
+ * and is intended for local development/preview only — real deployments should run MySQL.
  */
 
 class Database {
     private static $instance = null;
     private $pdo;
     private $config;
-    private $usedFallback = false;
+    private $usingFallback = false;
 
     private function __construct() {
         $configPath = __DIR__ . '/../config/config.php';
@@ -17,365 +26,216 @@ class Database {
         $this->config = require $configPath;
         $dbConfig = $this->config['db'];
 
-        if ($dbConfig['type'] === 'mysql') {
+        if (($dbConfig['type'] ?? 'mysql') !== 'mysql') {
+            throw new Exception("Unsupported db.type '{$dbConfig['type']}' in config.php. Only 'mysql' is supported (the SQLite path is an automatic dev-only fallback, not a configurable option).");
+        }
+
+        try {
+            $dsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['name']};charset=utf8mb4";
+            $this->pdo = new PDO($dsn, $dbConfig['user'], $dbConfig['pass'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            $this->initializeMySQLSchema();
+        } catch (PDOException $e) {
+            // Try creating the database if it doesn't exist yet, still on MySQL.
             try {
-                // First try connecting directly to the specified database
-                $dsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};dbname={$dbConfig['name']};charset=utf8mb4";
-                $this->pdo = new PDO($dsn, $dbConfig['user'], $dbConfig['pass'], [
+                $baseDsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};charset=utf8mb4";
+                $basePdo = new PDO($baseDsn, $dbConfig['user'], $dbConfig['pass'], [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES => false,
                 ]);
+                $dbNameClean = str_replace('`', '``', $dbConfig['name']);
+                $basePdo->exec("CREATE DATABASE IF NOT EXISTS `$dbNameClean` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+                $basePdo->exec("USE `$dbNameClean`;");
+                $this->pdo = $basePdo;
                 $this->initializeMySQLSchema();
-            } catch (PDOException $e) {
-                // Try connecting to MySQL server root to create database if unknown database
-                try {
-                    $baseDsn = "mysql:host={$dbConfig['host']};port={$dbConfig['port']};charset=utf8mb4";
-                    $basePdo = new PDO($baseDsn, $dbConfig['user'], $dbConfig['pass'], [
-                        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                        PDO::ATTR_EMULATE_PREPARES => false,
-                    ]);
-                    $dbNameClean = str_replace('`', '``', $dbConfig['name']);
-                    $basePdo->exec("CREATE DATABASE IF NOT EXISTS `$dbNameClean` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
-                    $basePdo->exec("USE `$dbNameClean`;");
-                    $this->pdo = $basePdo;
-                    $this->initializeMySQLSchema();
-                } catch (PDOException $e2) {
-                    // Fall back to SQLite with a clear, prominent warning message
-                    error_log("WARNING: MySQL connection failed (" . $e->getMessage() . "), running on temporary SQLite fallback — data will not persist correctly for production use");
-                    $this->setupSQLiteFallback();
-                }
+            } catch (PDOException $e2) {
+                // MySQL is genuinely unreachable. Fall back to local SQLite for dev/preview
+                // convenience — loudly, and derived from the same schema.sql, not a duplicate.
+                error_log(
+                    "==================================================================\n" .
+                    "WARNING: Could not connect to MySQL (" . $e2->getMessage() . ").\n" .
+                    "Falling back to a local SQLite database for DEVELOPMENT/PREVIEW ONLY.\n" .
+                    "Data in this mode is NOT what will run in production. Configure a\n" .
+                    "real MySQL connection in testbank/config/config.php before deploying.\n" .
+                    "=================================================================="
+                );
+                $this->initializeSQLiteFallback();
             }
-        } else {
-            $this->setupSQLiteFallback();
         }
     }
 
     /**
-     * Initializes MySQL database schema and default admin user if tables do not exist yet.
+     * Initializes the MySQL database schema from the single canonical /sql/schema.sql
+     * and seeds the default admin user, only if the schema hasn't been applied yet.
      */
     private function initializeMySQLSchema() {
-        try {
-            $stmt = $this->pdo->query("SHOW TABLES LIKE 'users'");
-            if (!$stmt->fetch()) {
-                $sqlPath = __DIR__ . '/../../sql/schema.sql';
-                if (file_exists($sqlPath)) {
-                    $sqlContent = file_get_contents($sqlPath);
-                    $this->pdo->exec($sqlContent);
-                }
+        $stmt = $this->pdo->query("SHOW TABLES LIKE 'users'");
+        if (!$stmt->fetch()) {
+            $sqlPath = __DIR__ . '/../../sql/schema.sql';
+            if (!file_exists($sqlPath)) {
+                throw new Exception("sql/schema.sql not found — cannot initialize the database.");
             }
-
-            // Seed default admin user if users table is empty
-            $checkUser = $this->pdo->query("SELECT COUNT(*) as cnt FROM users")->fetch();
-            if ($checkUser && intval($checkUser['cnt']) === 0) {
-                $adminEmail = $this->config['defaults']['admin_email'] ?? 'admin@testbank.com';
-                $adminPass = password_hash($this->config['defaults']['admin_password'] ?? 'admin123', PASSWORD_DEFAULT);
-                $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')");
-                $stmt->execute(['Administrator', $adminEmail, $adminPass]);
-            }
-        } catch (PDOException $e) {
-            error_log("initializeMySQLSchema warning: " . $e->getMessage());
+            $this->pdo->exec(file_get_contents($sqlPath));
         }
-    }
-
-    private function setupSQLiteFallback() {
-        $this->usedFallback = true;
-        $sqlitePath = $this->config['db']['sqlite_path'] ?? (__DIR__ . '/../testbank.sqlite');
-        
-        try {
-            $this->pdo = new PDO("sqlite:" . $sqlitePath, null, null, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]);
-            $this->pdo->exec("PRAGMA foreign_keys = ON;");
-            
-            // Robust check to see if the schema (specifically users table) exists
-            $schemaExists = false;
-            try {
-                $tableCheck = $this->pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")->fetch();
-                if ($tableCheck) {
-                    $schemaExists = true;
-                }
-            } catch (PDOException $e) {
-                // Ignore errors and re-initialize
-            }
-
-            if (!$schemaExists) {
-                $this->initializeSQLiteSchema();
-            }
-            $this->ensureSchemaUpdates();
-        } catch (PDOException $e) {
-            throw new Exception("Database connection failed: " . $e->getMessage());
-        }
+        $this->seedAdminIfEmpty();
     }
 
     /**
-     * Ensures all newer tables and optional/integrated columns exist in the active SQLite database.
+     * Dev-only fallback: opens (or creates) a local SQLite file at /testbank/data/dev.sqlite,
+     * and — if it has no tables yet — builds its schema by converting /sql/schema.sql on the
+     * fly. This is the ONLY place SQLite-specific schema exists, and it's generated, not
+     * hand-maintained, so it cannot drift from the canonical MySQL schema.
      */
-    private function ensureSchemaUpdates() {
-        // Ensure newer tables exist
-        $tables = [
-            "cases" => "CREATE TABLE IF NOT EXISTS cases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title VARCHAR(200) NOT NULL,
-                scenario_text TEXT NOT NULL,
-                category_id INT NOT NULL,
-                is_trend BOOLEAN DEFAULT 0,
-                created_by INT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-            )",
-            "case_exhibits" => "CREATE TABLE IF NOT EXISTS case_exhibits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                case_id INT NOT NULL,
-                tab_label VARCHAR(100) NOT NULL,
-                content TEXT NOT NULL,
-                timestamp_label VARCHAR(50) NULL,
-                order_index INT DEFAULT 0,
-                FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE
-            )",
-            "ngn_questions" => "CREATE TABLE IF NOT EXISTS ngn_questions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                category_id INT NOT NULL,
-                case_id INT NULL,
-                case_order INT NULL,
-                type VARCHAR(50) NOT NULL,
-                question_text TEXT NOT NULL,
-                question_data TEXT NOT NULL,
-                difficulty VARCHAR(20) NOT NULL,
-                points DECIMAL(6,2) DEFAULT 1.00,
-                scoring_method VARCHAR(30) DEFAULT 'all_or_nothing',
-                status VARCHAR(20) DEFAULT 'draft',
-                created_by INT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
-                FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE SET NULL,
-                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-            )",
-            "exam_questions" => "CREATE TABLE IF NOT EXISTS exam_questions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exam_id INT NOT NULL,
-                question_id INT NOT NULL,
-                order_index INT DEFAULT 0,
-                points_override DECIMAL(6,2) NULL,
-                FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
-            )",
-            "exam_rules" => "CREATE TABLE IF NOT EXISTS exam_rules (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exam_id INT NOT NULL,
-                category_id INT NOT NULL,
-                difficulty VARCHAR(20) DEFAULT 'any',
-                question_count INT,
-                FOREIGN KEY (exam_id) REFERENCES exams(id) ON DELETE CASCADE,
-                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
-            )",
-            "gradebook_items" => "CREATE TABLE IF NOT EXISTS gradebook_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                course_id INT NOT NULL,
-                item_type TEXT NOT NULL,
-                item_id INT NULL,
-                title VARCHAR(200) NOT NULL,
-                weight DECIMAL(5,2) NOT NULL DEFAULT 0.00,
-                max_score DECIMAL(6,2) NOT NULL DEFAULT 100.00,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                FOREIGN KEY (item_id) REFERENCES exams(id) ON DELETE SET NULL
-            )",
-            "gradebook_scores" => "CREATE TABLE IF NOT EXISTS gradebook_scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                gradebook_item_id INT NOT NULL,
-                user_id INT NOT NULL,
-                score DECIMAL(6,2) NOT NULL DEFAULT 0.00,
-                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (gradebook_item_id, user_id),
-                FOREIGN KEY (gradebook_item_id) REFERENCES gradebook_items(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )",
-            "activity_log" => "CREATE TABLE IF NOT EXISTS activity_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INT NOT NULL,
-                course_id INT NULL,
-                action VARCHAR(100) NOT NULL,
-                item_type VARCHAR(50) NULL,
-                item_id INT NULL,
-                meta TEXT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
-            )",
-            "messages" => "CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender_id INT NOT NULL,
-                recipient_id INT NULL,
-                recipient_group_id INT NULL,
-                course_id INT NULL,
-                subject VARCHAR(200) NOT NULL,
-                body TEXT NOT NULL,
-                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (recipient_group_id) REFERENCES groups(id) ON DELETE CASCADE,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
-            )",
-            "message_reads" => "CREATE TABLE IF NOT EXISTS message_reads (
-                message_id INT NOT NULL,
-                user_id INT NOT NULL,
-                read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (message_id, user_id),
-                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )"
-        ];
+    private function initializeSQLiteFallback() {
+        $this->usingFallback = true;
+        $dataDir = __DIR__ . '/../data';
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0775, true);
+        }
+        $sqlitePath = $dataDir . '/dev.sqlite';
 
-        foreach ($tables as $name => $createSql) {
-            try {
-                $this->pdo->exec($createSql);
-            } catch (PDOException $e) {
-                error_log("Failed to create table $name: " . $e->getMessage());
+        $this->pdo = new PDO('sqlite:' . $sqlitePath, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $this->pdo->exec('PRAGMA foreign_keys = ON;');
+
+        // Alias the two MySQL-only SQL functions actually used elsewhere in the app
+        // (RAND() and NOW()) so those call sites work unmodified against SQLite too.
+        $this->pdo->sqliteCreateFunction('RAND', function () {
+            return mt_rand() / mt_getrandmax();
+        }, 0);
+        $this->pdo->sqliteCreateFunction('NOW', function () {
+            return date('Y-m-d H:i:s');
+        }, 0);
+
+        $stmt = $this->pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+        if (!$stmt->fetch()) {
+            $sqlPath = __DIR__ . '/../../sql/schema.sql';
+            if (!file_exists($sqlPath)) {
+                throw new Exception("sql/schema.sql not found — cannot initialize the fallback database.");
+            }
+            $statements = $this->convertMySQLSchemaToSQLite(file_get_contents($sqlPath));
+            foreach ($statements as $statement) {
+                $statement = trim($statement);
+                if ($statement === '') {
+                    continue;
+                }
+                try {
+                    $this->pdo->exec($statement);
+                } catch (PDOException $ex) {
+                    // Surface conversion problems loudly rather than silently skipping —
+                    // a failed statement here means the dev database is incomplete.
+                    error_log("SQLite fallback schema statement failed: " . $ex->getMessage() . "\nStatement: " . $statement);
+                }
             }
         }
-
-        // Apply column additions (alters)
-        $alters = [
-            "ALTER TABLE cases ADD COLUMN created_by INTEGER",
-            "ALTER TABLE exams ADD COLUMN course_id INTEGER",
-            "ALTER TABLE exams ADD COLUMN gradebook_category VARCHAR(50) DEFAULT 'summative'",
-            "ALTER TABLE questions ADD COLUMN case_id INTEGER",
-            "ALTER TABLE questions ADD COLUMN case_order INTEGER",
-            "ALTER TABLE courses ADD COLUMN category_id INTEGER",
-            "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
-            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00",
-            "ALTER TABLE exam_attempts ADD COLUMN resolved_question_ids TEXT",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_attempt_question_unique ON attempt_answers (attempt_id, question_id)",
-            "ALTER TABLE certificate_templates ADD COLUMN html_template TEXT",
-            "ALTER TABLE certificate_templates ADD COLUMN background_image VARCHAR(255)",
-            "ALTER TABLE certificates ADD COLUMN user_id INTEGER",
-            "ALTER TABLE certificates ADD COLUMN certificate_number VARCHAR(100)",
-            "ALTER TABLE certificates ADD COLUMN pdf_path VARCHAR(255)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_course_student ON certificates (course_id, student_id)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_course_user ON certificates (course_id, user_id)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_number ON certificates (certificate_number)",
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_cert_template_course_uniq ON certificate_templates (course_id)",
-            "ALTER TABLE activity_log ADD COLUMN course_id INTEGER",
-            "ALTER TABLE activity_log ADD COLUMN item_type VARCHAR(50)",
-            "ALTER TABLE activity_log ADD COLUMN item_id INTEGER",
-            "ALTER TABLE activity_log ADD COLUMN meta TEXT",
-            "ALTER TABLE messages ADD COLUMN recipient_id INTEGER",
-            "ALTER TABLE messages ADD COLUMN recipient_group_id INTEGER",
-            "ALTER TABLE messages ADD COLUMN course_id INTEGER",
-            "ALTER TABLE messages ADD COLUMN subject VARCHAR(200)",
-            "ALTER TABLE messages ADD COLUMN body TEXT",
-            "ALTER TABLE messages ADD COLUMN sent_at TIMESTAMP"
-        ];
-
-        foreach ($alters as $alter) {
-            try {
-                $this->pdo->exec($alter);
-            } catch (PDOException $e) {
-                // Ignore column already exists errors or table not found errors
-            }
-        }
+        $this->seedAdminIfEmpty();
     }
 
-    private function initializeSQLiteSchema() {
-        $files = [
-            __DIR__ . '/../../sql/schema.sql'
-        ];
+    /**
+     * Converts the canonical MySQL schema.sql into a sequence of SQLite-compatible
+     * statements. This is intentionally the ONLY place MySQL->SQLite syntax translation
+     * happens, and it operates on the real schema file rather than a separately
+     * maintained copy, so the two can never drift apart again.
+     *
+     * @param string $sql the raw contents of sql/schema.sql
+     * @return array of individual SQL statements to execute in order
+     */
+    private function convertMySQLSchemaToSQLite($sql) {
+        $out = [];
 
-        foreach ($files as $sqlPath) {
-            if (!file_exists($sqlPath)) {
+        // Strip full-line SQL comments BEFORE splitting into statements — a
+        // "-- N. Table name" comment sitting directly above a CREATE TABLE
+        // would otherwise break the anchored match below.
+        $sql = preg_replace('/^\s*--.*$/m', '', $sql);
+
+        // Split on statement-terminating semicolons. schema.sql doesn't contain
+        // semicolons inside string literals in CREATE TABLE bodies, so this is safe.
+        $rawStatements = array_filter(array_map('trim', explode(";", $sql)));
+
+        foreach ($rawStatements as $stmt) {
+            // Skip MySQL-only statements that have no SQLite equivalent/need.
+            if (preg_match('/^CREATE DATABASE/i', $stmt) || preg_match('/^USE\s+/i', $stmt)) {
                 continue;
             }
-            $sqlContent = file_get_contents($sqlPath);
-            
-            // Convert MySQL schema to SQLite compatible syntax
-            $sqlContent = preg_replace('/CREATE DATABASE IF NOT EXISTS \w+;/', '', $sqlContent);
-            $sqlContent = preg_replace('/USE \w+;/', '', $sqlContent);
-            $sqlContent = preg_replace('/SET FOREIGN_KEY_CHECKS = \d;/', '', $sqlContent);
-            
-            // Remove MySQL table options without stripping the semicolons at the end of statements
-            $sqlContent = preg_replace('/ENGINE\s*=\s*\w+/i', '', $sqlContent);
-            $sqlContent = preg_replace('/DEFAULT\s+CHARSET\s*=\s*[\w-]+/i', '', $sqlContent);
-            $sqlContent = preg_replace('/COLLATE\s*=\s*[\w-]+/i', '', $sqlContent);
-            $sqlContent = preg_replace('/COLLATE\s+[\w-]+/i', '', $sqlContent);
-            
-            // SQLite doesn't support ON UPDATE CURRENT_TIMESTAMP
-            $sqlContent = preg_replace('/ON\s+UPDATE\s+CURRENT_TIMESTAMP/i', '', $sqlContent);
-            
-            // Convert INT AUTO_INCREMENT to INTEGER PRIMARY KEY
-            $sqlContent = preg_replace('/id INT AUTO_INCREMENT PRIMARY KEY/i', 'id INTEGER PRIMARY KEY AUTOINCREMENT', $sqlContent);
-            $sqlContent = preg_replace('/id\s+INT\s+NOT\s+NULL\s+AUTO_INCREMENT\s+PRIMARY\s+KEY/i', 'id INTEGER PRIMARY KEY AUTOINCREMENT', $sqlContent);
-            $sqlContent = preg_replace('/INT\s+AUTO_INCREMENT\s+PRIMARY\s+KEY/i', 'INTEGER PRIMARY KEY AUTOINCREMENT', $sqlContent);
-            $sqlContent = preg_replace('/INT\s+AUTO_INCREMENT/i', 'INTEGER PRIMARY KEY AUTOINCREMENT', $sqlContent);
-            
-            // SQLite doesn't support ENUM, map it to TEXT
-            $sqlContent = preg_replace('/ENUM\([^)]+\)/i', 'TEXT', $sqlContent);
-            
-            // Convert UNIQUE KEY to UNIQUE constraint
-            $sqlContent = preg_replace('/UNIQUE KEY\s+\w+\s*\(([^)]+)\)/i', 'UNIQUE ($1)', $sqlContent);
-            
-            // Let's process line-by-line
-            $lines = explode("\n", $sqlContent);
-            $cleanLines = [];
-            foreach ($lines as $line) {
-                if (preg_match('/^\s*INDEX\s+idx_/i', $line)) {
-                    continue; // Skip inline index declarations
-                }
-                if (preg_match('/^\s*ALTER\s+TABLE/i', $line)) {
-                    continue; // Skip ALTER TABLE statements (we'll run SQLite-compatible ones separately)
-                }
-                $cleanLines[] = $line;
+
+            // Convert FOREIGN_KEY_CHECKS toggling to the SQLite equivalent.
+            if (preg_match('/^SET\s+FOREIGN_KEY_CHECKS\s*=\s*(\d)/i', $stmt, $m)) {
+                $out[] = "PRAGMA foreign_keys = " . ($m[1] === '0' ? 'OFF' : 'ON');
+                continue;
             }
-            $sqlContent = implode("\n", $cleanLines);
-            
-            // Remove trailing commas before closing parenthesis
-            $sqlContent = preg_replace('/,\s*\)/', "\n)", $sqlContent);
-            
-            // Split by semicolon and run statements
-            $statements = explode(';', $sqlContent);
-            foreach ($statements as $stmt) {
-                $stmt = trim($stmt);
-                if (!empty($stmt)) {
-                    try {
-                        $this->pdo->exec($stmt);
-                    } catch (PDOException $e) {
-                        error_log("SQLite init warning: " . $e->getMessage() . " on statement: " . $stmt);
+
+            // Normalize backtick-quoted identifiers to double-quoted (SQLite standard).
+            $stmt = preg_replace('/`([^`]+)`/', '"$1"', $stmt);
+
+            if (preg_match('/^DROP TABLE/i', $stmt)) {
+                $out[] = $stmt;
+                continue;
+            }
+
+            if (preg_match('/^CREATE TABLE\s+"?(\w+)"?/i', $stmt, $tableMatch)) {
+                $tableName = $tableMatch[1];
+
+                // Strip the trailing ENGINE=...DEFAULT CHARSET=...COLLATE=... clause.
+                $stmt = preg_replace('/\)\s*ENGINE\s*=.*$/is', ')', $stmt);
+
+                // Extract inline INDEX / KEY / UNIQUE KEY clauses into separate
+                // CREATE INDEX statements — SQLite doesn't support them inline.
+                // These must be queued and appended AFTER this table's own CREATE
+                // TABLE statement, not before — an index can't reference a table
+                // that doesn't exist yet.
+                $indexStatements = [];
+                if (preg_match_all('/,\s*(UNIQUE\s+KEY|KEY|INDEX)\s+(\w+)\s*\(([^)]+)\)/i', $stmt, $idxMatches, PREG_SET_ORDER)) {
+                    foreach ($idxMatches as $idx) {
+                        $isUnique = stripos($idx[1], 'unique') !== false;
+                        $idxName = $idx[2];
+                        $cols = $idx[3];
+                        $indexStatements[] = ($isUnique ? "CREATE UNIQUE INDEX " : "CREATE INDEX ") .
+                                             $idxName . " ON " . $tableName . " (" . $cols . ")";
                     }
+                    $stmt = preg_replace('/,\s*(UNIQUE\s+KEY|KEY|INDEX)\s+(\w+)\s*\(([^)]+)\)/i', '', $stmt);
                 }
+
+                // Type/syntax conversions.
+                $stmt = preg_replace('/\bINT\s+AUTO_INCREMENT\s+PRIMARY\s+KEY\b/i', 'INTEGER PRIMARY KEY AUTOINCREMENT', $stmt);
+                $stmt = preg_replace('/ENUM\s*\([^)]*\)/i', 'TEXT', $stmt);
+                $stmt = preg_replace('/\bJSON\b/i', 'TEXT', $stmt);
+                $stmt = preg_replace('/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP/i', '', $stmt);
+
+                // Clean up any now-dangling trailing comma before the closing paren
+                // left behind after stripping inline indexes.
+                $stmt = preg_replace('/,(\s*)\)\s*$/s', '$1)', $stmt);
+
+                $out[] = trim($stmt);
+                // Indexes go right after their own table, never before.
+                foreach ($indexStatements as $idxStmt) {
+                    $out[] = $idxStmt;
+                }
+                continue;
+            }
+
+            // Anything else (stray statements) — pass through unchanged.
+            if ($stmt !== '') {
+                $out[] = $stmt;
             }
         }
 
-        // Apply SQLite-compatible ALTER TABLE additions to ensure optional/integrated columns exist
-        $alters = [
-            "ALTER TABLE exams ADD COLUMN course_id INTEGER",
-            "ALTER TABLE exams ADD COLUMN gradebook_category VARCHAR(50) DEFAULT 'summative'",
-            "ALTER TABLE questions ADD COLUMN case_id INTEGER",
-            "ALTER TABLE questions ADD COLUMN case_order INTEGER",
-            "ALTER TABLE courses ADD COLUMN category_id INTEGER",
-            "ALTER TABLE courses ADD COLUMN thumbnail TEXT",
-            "ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) DEFAULT 50.00"
-        ];
-        foreach ($alters as $alter) {
-            try {
-                $this->pdo->exec($alter);
-            } catch (PDOException $e) {
-                // Ignore column already exists errors
-            }
-        }
-        
-        // Seed an admin user
-        $adminEmail = $this->config['defaults']['admin_email'] ?? 'admin@testbank.com';
-        $adminPass = password_hash($this->config['defaults']['admin_password'] ?? 'admin123', PASSWORD_DEFAULT);
-        
-        $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')");
-        $stmt->execute(['Administrator', $adminEmail, $adminPass]);
+        return $out;
+    }
 
-        // Seed some starter categories
-        $this->pdo->exec("INSERT INTO categories (name, slug, description) VALUES ('General Science', 'general-science', 'Basic science questions')");
-        $this->pdo->exec("INSERT INTO categories (name, slug, description) VALUES ('Web Development', 'web-development', 'HTML, CSS, JavaScript, PHP')");
+    private function seedAdminIfEmpty() {
+        $checkUser = $this->pdo->query("SELECT COUNT(*) as cnt FROM users")->fetch();
+        if ($checkUser && intval($checkUser['cnt']) === 0) {
+            $adminEmail = $this->config['defaults']['admin_email'] ?? 'admin@testbank.com';
+            $adminPass = password_hash($this->config['defaults']['admin_password'] ?? 'admin123', PASSWORD_DEFAULT);
+            $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')");
+            $stmt->execute(['Administrator', $adminEmail, $adminPass]);
+        }
     }
 
     public static function getInstance() {
@@ -389,7 +249,11 @@ class Database {
         return $this->pdo;
     }
 
+    /**
+     * True if this request is running on the local SQLite dev fallback rather than
+     * real MySQL. Views can use this to show a visible "dev mode" banner if desired.
+     */
     public function isFallback() {
-        return $this->usedFallback;
+        return $this->usingFallback;
     }
 }

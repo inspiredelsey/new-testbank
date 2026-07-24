@@ -10,40 +10,8 @@ class Link {
     private $db;
 
     public function __construct() {
+        // Table is created once from the canonical /sql/schema.sql — no per-request schema checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Dynamic resilient schema check/creation to ensure links table always exists
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $query = "CREATE TABLE IF NOT EXISTS links (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                course_id INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                url TEXT NOT NULL,
-                description TEXT,
-                order_index INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-            )";
-        } else {
-            $query = "CREATE TABLE IF NOT EXISTS links (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                course_id INT NOT NULL,
-                title VARCHAR(200) NOT NULL,
-                url VARCHAR(500) NOT NULL,
-                description TEXT NULL,
-                order_index INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                INDEX idx_link_course (course_id),
-                INDEX idx_link_order (order_index)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        }
-        try {
-            @$this->db->exec($query);
-        } catch (Exception $e) {
-            error_log("Link::__construct schema init warning: " . $e->getMessage());
-        }
     }
 
     /**

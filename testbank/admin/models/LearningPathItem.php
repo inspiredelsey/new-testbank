@@ -10,44 +10,8 @@ class LearningPathItem {
     private $db;
 
     public function __construct() {
+        // Table is created once from the canonical /sql/schema.sql — no per-request schema checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Dynamic resilient schema check/creation to ensure learning path tables always exist
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $queryItems = "CREATE TABLE IF NOT EXISTS learning_path_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                course_id INTEGER NOT NULL,
-                item_type TEXT NOT NULL,
-                item_id INTEGER NOT NULL,
-                order_index INTEGER DEFAULT 0,
-                prerequisite_item_id INTEGER NULL,
-                is_required INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                FOREIGN KEY (prerequisite_item_id) REFERENCES learning_path_items(id) ON DELETE SET NULL
-            )";
-        } else {
-            $queryItems = "CREATE TABLE IF NOT EXISTS learning_path_items (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                course_id INT NOT NULL,
-                item_type ENUM('document', 'link', 'quiz') NOT NULL,
-                item_id INT NOT NULL,
-                order_index INT DEFAULT 0,
-                prerequisite_item_id INT NULL,
-                is_required BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-                FOREIGN KEY (prerequisite_item_id) REFERENCES learning_path_items(id) ON DELETE SET NULL,
-                INDEX idx_lpi_course (course_id),
-                INDEX idx_lpi_order (order_index)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        }
-        try {
-            @$this->db->exec($queryItems);
-        } catch (Exception $e) {
-            error_log("LearningPathItem::__construct schema init warning: " . $e->getMessage());
-        }
     }
 
     /**
