@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Test Bank LMS</title>
+    <title>Staff Login - Test Bank LMS</title>
     <!-- Bootstrap 5 CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Google Fonts -->
@@ -13,10 +13,9 @@
     <script>if (typeof lucide === 'undefined') { document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"><\/script>'); }</script>
     <style>
         :root {
-            --primary-indigo: #4f46e5;
-            --primary-indigo-hover: #4338ca;
-            --primary-indigo-subtle: #f5f3ff;
-            --bg-slate: #f8fafc;
+            --primary-slate: #1e293b;
+            --primary-slate-hover: #0f172a;
+            --bg-slate: #f1f5f9;
             --border-light: #e2e8f0;
             --text-dark: #0f172a;
             --text-muted: #64748b;
@@ -45,29 +44,26 @@
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .form-control:focus {
-            border-color: #a5b4fc;
-            box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.25) !important;
+            border-color: #94a3b8;
+            box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.2) !important;
             outline: none;
         }
-        .btn-primary {
-            background-color: var(--primary-indigo) !important;
-            border-color: var(--primary-indigo) !important;
+        .btn-dark-slate {
+            background-color: var(--primary-slate) !important;
+            border-color: var(--primary-slate) !important;
             color: #ffffff !important;
             font-weight: 500;
             border-radius: 0.5rem;
             padding: 0.6rem 1.25rem;
             transition: all 0.2s ease;
-            box-shadow: 0 1px 2px 0 rgba(79, 70, 229, 0.1) !important;
         }
-        .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
-            background-color: var(--primary-indigo-hover) !important;
-            border-color: var(--primary-indigo-hover) !important;
+        .btn-dark-slate:hover, .btn-dark-slate:focus, .btn-dark-slate:active {
+            background-color: var(--primary-slate-hover) !important;
+            border-color: var(--primary-slate-hover) !important;
+            color: #ffffff !important;
         }
-        .bg-primary {
-            background-color: var(--primary-indigo) !important;
-        }
-        .text-primary {
-            color: var(--primary-indigo) !important;
+        .bg-slate-dark {
+            background-color: var(--primary-slate) !important;
         }
     </style>
 </head>
@@ -76,17 +72,17 @@
 <div class="container" style="max-width: 480px;">
     <!-- Logo/Brand Section -->
     <div class="text-center mb-4">
-        <div class="d-inline-flex p-3 bg-primary text-white rounded-4 mb-3 shadow-sm">
-            <i data-lucide="award" size="36"></i>
+        <div class="d-inline-flex p-3 bg-slate-dark text-white rounded-4 mb-3 shadow-sm">
+            <i data-lucide="shield" size="36"></i>
         </div>
-        <h2 class="display-font fw-bold text-dark mb-1">Student Portal</h2>
-        <p class="text-muted small">Test Bank LMS — Question Bank &amp; Exam Management System</p>
+        <h2 class="display-font fw-bold text-dark mb-1">Staff Portal</h2>
+        <p class="text-muted small">Administrator &amp; Instructor Login</p>
     </div>
 
     <!-- Card -->
     <div class="card login-card bg-white p-4">
         <div class="card-body">
-            <h4 class="fw-bold text-dark mb-4 text-center">Log In to Your Account</h4>
+            <h4 class="fw-bold text-dark mb-4 text-center">Sign In</h4>
 
             <?php if (!empty($error)): ?>
                 <div class="alert alert-danger border-0 rounded-3 p-3 mb-4 d-flex align-items-center gap-2">
@@ -95,14 +91,7 @@
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($success) || !empty($_GET['success'])): ?>
-                <div class="alert alert-success border-0 rounded-3 p-3 mb-4 d-flex align-items-center gap-2">
-                    <i data-lucide="check-circle" size="20"></i>
-                    <div class="small fw-semibold"><?php echo htmlspecialchars($success ?? $_GET['success'] ?? ''); ?></div>
-                </div>
-            <?php endif; ?>
-
-            <form action="index.php?route=login" method="POST">
+            <form action="index.php?route=staff-login" method="POST">
                 <input type="hidden" name="csrf_token" value="<?php echo Session::getCSRFToken(); ?>">
 
                 <div class="mb-3">
@@ -121,19 +110,18 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2">
-                    Let's Begin <i data-lucide="arrow-right" size="18"></i>
+                <button type="submit" class="btn btn-dark-slate w-100 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2">
+                    Sign In <i data-lucide="arrow-right" size="18"></i>
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- Register Redirect -->
     <p class="text-center mt-4 text-muted small">
-        Don't have an account yet? <a href="index.php?route=register" class="fw-bold text-primary text-decoration-none">Create an Account</a>
+        Not a staff member? <a href="index.php?route=login" class="fw-bold text-primary text-decoration-none">Go to Student Portal</a>
     </p>
     <p class="text-center mt-2 text-muted small" style="font-size: 0.8rem;">
-        Administrator or instructor? <a href="index.php?route=staff-login" class="text-muted text-decoration-underline">Staff Login</a>
+        Staff accounts (admin and instructor) are created by an existing administrator — there is no self-registration here.
     </p>
 </div>
 

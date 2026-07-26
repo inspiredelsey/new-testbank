@@ -1,7 +1,67 @@
 <?php
 $pageTitle = 'Student Portal';
 include __DIR__ . '/../layout_header.php';
+
+// Overall average grade across enrolled courses with at least one graded item
+$gradedCourseGrades = array_filter(array_map(fn($s) => $s['grade']['is_partial'] === false && $s['grade']['final_grade'] > 0 ? $s['grade']['final_grade'] : null, $courseSummaries));
+$overallAverage = count($gradedCourseGrades) > 0 ? round(array_sum($gradedCourseGrades) / count($gradedCourseGrades)) : null;
 ?>
+
+<!-- Welcome Banner -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+        <h2 class="display-font fw-bold text-dark mb-1">Welcome, <?php echo htmlspecialchars($user['name']); ?></h2>
+        <p class="text-muted mb-0">Here's what's happening with your courses today.</p>
+    </div>
+</div>
+
+<!-- Summary Stat Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="p-2 rounded-3 bg-primary-subtle text-primary"><i data-lucide="graduation-cap" size="22"></i></div>
+                <div>
+                    <div class="fs-4 fw-bold text-dark"><?php echo count($enrolledCourses); ?></div>
+                    <div class="text-muted small">Enrolled Courses</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="p-2 rounded-3 bg-success-subtle text-success"><i data-lucide="award" size="22"></i></div>
+                <div>
+                    <div class="fs-4 fw-bold text-dark"><?php echo $certificateCount; ?></div>
+                    <div class="text-muted small">Certificates Earned</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="p-2 rounded-3 bg-warning-subtle text-warning"><i data-lucide="bar-chart-3" size="22"></i></div>
+                <div>
+                    <div class="fs-4 fw-bold text-dark"><?php echo $overallAverage !== null ? $overallAverage . '%' : '—'; ?></div>
+                    <div class="text-muted small">Average Grade</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="p-2 rounded-3 bg-info-subtle text-info"><i data-lucide="book-open" size="22"></i></div>
+                <div>
+                    <div class="fs-4 fw-bold text-dark"><?php echo count($availableExams); ?></div>
+                    <div class="text-muted small">Exams Available</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row">
     <!-- Main Available Exams list -->
@@ -16,17 +76,29 @@ include __DIR__ . '/../layout_header.php';
                 <?php if (empty($enrolledCourses)): ?>
                     <div class="text-center py-4">
                         <i data-lucide="book" class="text-muted d-block mx-auto mb-2" size="32"></i>
-                        <p class="text-muted small mb-0">You are not enrolled in any courses yet.</p>
+                        <p class="text-muted small mb-2">You are not enrolled in any courses yet.</p>
+                        <a href="index.php?route=courses" class="btn btn-sm btn-primary">Browse Courses</a>
                     </div>
                 <?php else: ?>
                     <div class="row g-3">
                         <?php foreach ($enrolledCourses as $course): ?>
+                            <?php $summary = $courseSummaries[$course['id']] ?? null; ?>
                             <div class="col-12">
-                                <div class="p-3 border rounded-3 bg-light-subtle d-flex justify-content-between align-items-center">
+                                <div class="p-3 border rounded-3 bg-light-subtle d-flex justify-content-between align-items-center flex-wrap gap-2">
                                     <div>
                                         <h6 class="fw-bold text-dark mb-1"><?php echo htmlspecialchars($course['title']); ?></h6>
                                         <p class="text-muted small mb-0 text-truncate" style="max-width: 400px;"><?php echo htmlspecialchars($course['description'] ?: 'No description provided.'); ?></p>
-                                        <small class="text-muted font-sans" style="font-size: 0.75rem;"><i data-lucide="user" size="12" class="me-1"></i>Instructor: <?php echo htmlspecialchars($course['instructor_name'] ?? 'Unassigned'); ?></small>
+                                        <small class="text-muted font-sans d-block mb-1" style="font-size: 0.75rem;"><i data-lucide="user" size="12" class="me-1"></i>Instructor: <?php echo htmlspecialchars($course['instructor_name'] ?? 'Unassigned'); ?></small>
+                                        <?php if ($summary): ?>
+                                            <div class="d-flex flex-wrap gap-2 mt-1">
+                                                <?php if ($summary['path_total'] > 0): ?>
+                                                    <span class="badge bg-light text-secondary border font-sans small"><i data-lucide="route" size="12" class="me-1"></i><?php echo $summary['path_completed']; ?>/<?php echo $summary['path_total']; ?> lessons (<?php echo $summary['path_percent']; ?>%)</span>
+                                                <?php endif; ?>
+                                                <?php if ($summary['grade']['final_grade'] > 0 || !$summary['grade']['is_partial']): ?>
+                                                    <span class="badge bg-light text-secondary border font-sans small"><i data-lucide="bar-chart-3" size="12" class="me-1"></i>Grade: <?php echo round($summary['grade']['final_grade'], 1); ?>%<?php echo $summary['grade']['is_partial'] ? ' (partial)' : ''; ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                     <a href="index.php?route=student/course/view&id=<?php echo $course['id']; ?>" class="btn btn-sm btn-primary d-flex align-items-center gap-1.5 px-3 py-2">
                                         Enter Course <i data-lucide="arrow-right" size="14"></i>

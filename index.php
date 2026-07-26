@@ -50,6 +50,7 @@ if ($route === 'admin') {
 switch ($route) {
     // ---------------- AUTH ROUTES ----------------
     case 'login':
+    case 'staff-login':
     case 'register':
     case 'logout':
         require_once __DIR__ . '/testbank/admin/controllers/AuthController.php';

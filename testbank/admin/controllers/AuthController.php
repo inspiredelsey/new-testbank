@@ -21,23 +21,16 @@ class AuthController {
                 if (Auth::isLoggedIn()) {
                     $this->redirectUserBasedOnRole();
                 }
-
-                $error = '';
-                if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                    if (!Session::validateCSRF($csrfToken)) {
-                        $error = 'CSRF verification failed.';
-                    } else {
-                        $email = trim($_POST['email'] ?? '');
-                        $password = $_POST['password'] ?? '';
-
-                        if (Auth::login($email, $password)) {
-                            $this->redirectUserBasedOnRole();
-                        } else {
-                            $error = 'Invalid email or password. Please try again.';
-                        }
-                    }
-                }
+                $error = $this->handleLoginPost($csrfToken);
                 include __DIR__ . '/../views/auth/login.php';
+                exit;
+
+            case 'staff-login':
+                if (Auth::isLoggedIn()) {
+                    $this->redirectUserBasedOnRole();
+                }
+                $error = $this->handleLoginPost($csrfToken);
+                include __DIR__ . '/../views/auth/staff_login.php';
                 exit;
 
             case 'register':
@@ -54,14 +47,17 @@ class AuthController {
                         $name = trim($_POST['name'] ?? '');
                         $email = trim($_POST['email'] ?? '');
                         $password = $_POST['password'] ?? '';
-                        $role = $_POST['role'] ?? 'student'; // 'student' or 'instructor'
+                        // Public self-registration ALWAYS creates a student account.
+                        // Instructor and admin accounts can only be created by an
+                        // existing admin via the admin User management panel — this
+                        // is enforced here server-side, not just hidden in the UI,
+                        // so a raw POST can't be used to self-register as instructor/admin.
+                        $role = 'student';
 
                         if (empty($name) || empty($email) || empty($password)) {
                             $error = 'Please fill in all required fields.';
                         } else if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                             $error = 'Invalid email address format.';
-                        } else if (!in_array($role, ['student', 'instructor'])) {
-                            $error = 'Invalid user role selected.';
                         } else {
                             // Check for email duplicate
                             $stmt = $this->db->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
@@ -99,5 +95,29 @@ class AuthController {
             header("Location: index.php?route=student/dashboard");
         }
         exit;
+    }
+
+    /**
+     * Shared login POST handler used by both the student/instructor login
+     * page and the separate staff/admin login page — same accounts, same
+     * credential check, just two different entry points.
+     *
+     * @param string $csrfToken
+     * @return string an error message to display, or '' if none
+     */
+    private function handleLoginPost($csrfToken) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return '';
+        }
+        if (!Session::validateCSRF($csrfToken)) {
+            return 'CSRF verification failed.';
+        }
+        $email = trim($_POST['email'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (Auth::login($email, $password)) {
+            $this->redirectUserBasedOnRole();
+        }
+        return 'Invalid email or password. Please try again.';
     }
 }

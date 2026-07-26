@@ -79,7 +79,7 @@
             <i data-lucide="user-plus" size="36"></i>
         </div>
         <h2 class="display-font fw-bold text-dark mb-1">Create Account</h2>
-        <p class="text-muted small">Register as a student or instructor to get started</p>
+        <p class="text-muted small">Create your student account to get started</p>
     </div>
 
     <div class="card login-card bg-white p-4">
@@ -120,14 +120,6 @@
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label for="role" class="form-label fw-semibold text-muted small">I want to register as:</label>
-                    <select class="form-select" id="role" name="role" required>
-                        <option value="student" selected>Student / Examinee</option>
-                        <option value="instructor">Instructor / Examiner</option>
-                    </select>
-                </div>
-
                 <button type="submit" class="btn btn-primary w-100 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2">
                     Create Account <i data-lucide="check" size="18"></i>
                 </button>
@@ -137,6 +129,9 @@
 
     <p class="text-center mt-4 text-muted small">
         Already have an account? <a href="index.php?route=login" class="fw-bold text-primary text-decoration-none">Log In</a>
+    </p>
+    <p class="text-center mt-2 text-muted small" style="font-size: 0.8rem;">
+        Instructor accounts are created by an administrator, not through self-registration.
     </p>
 </div>
 

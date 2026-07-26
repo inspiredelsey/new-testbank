@@ -9,6 +9,7 @@ require_once __DIR__ . '/../models/Question.php';
 require_once __DIR__ . '/../models/Course.php';
 require_once __DIR__ . '/../models/LearningPath.php';
 require_once __DIR__ . '/../../includes/Auth.php';
+require_once __DIR__ . '/../../includes/Database.php';
 require_once __DIR__ . '/../../includes/Grader.php';
 require_once __DIR__ . '/../../includes/QuestionRenderer.php';
 
@@ -251,11 +252,42 @@ class StudentController {
                 // Get enrolled courses
                 $enrolledCourses = $this->courseModel->getEnrolledCourses($user['id']);
 
-                // Available Published Exams
-                $availableExams = $this->examModel->getAll(['status' => 'published']);
-                
+                // Available exams — SCOPED to courses this student is actually
+                // enrolled in (previously this used getAll(['status'=>'published']),
+                // which returned every published exam system-wide regardless of
+                // enrollment — a real access-scoping bug, now fixed).
+                $availableExams = $this->examModel->forEnrolledStudent($user['id']);
+
                 // Student history
                 $history = $this->attemptModel->getStudentHistory($user['id']);
+
+                // Certificates earned count
+                $db = Database::getInstance()->getConnection();
+                $certStmt = $db->prepare("SELECT COUNT(*) FROM certificates WHERE user_id = ?");
+                $certStmt->execute([$user['id']]);
+                $certificateCount = intval($certStmt->fetchColumn());
+
+                // Per-course grade + learning path completion summary
+                require_once __DIR__ . '/../../includes/GradebookCalculator.php';
+                require_once __DIR__ . '/../models/LearningPathProgress.php';
+                $lpProgressModel = new LearningPathProgress();
+
+                $courseSummaries = [];
+                foreach ($enrolledCourses as $course) {
+                    $grade = GradebookCalculator::finalGrade($user['id'], $course['id']);
+
+                    $progressRows = $lpProgressModel->forUser($user['id'], $course['id']);
+                    $totalItems = count($progressRows);
+                    $completedItems = count(array_filter($progressRows, fn($r) => $r['status'] === 'completed'));
+                    $pathPercent = $totalItems > 0 ? round(($completedItems / $totalItems) * 100) : null;
+
+                    $courseSummaries[$course['id']] = [
+                        'grade' => $grade,
+                        'path_percent' => $pathPercent,
+                        'path_completed' => $completedItems,
+                        'path_total' => $totalItems,
+                    ];
+                }
 
                 include __DIR__ . '/../views/student/dashboard.php';
                 exit;

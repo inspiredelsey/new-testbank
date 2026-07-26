@@ -13,6 +13,29 @@ class Exam {
     }
 
     /**
+     * Exams a given student is actually allowed to see: published, and
+     * belonging to a course the student is actively enrolled in. Used by
+     * the student dashboard instead of all() to fix a real exposure bug —
+     * all() with no course filter returns every published exam system-wide,
+     * regardless of enrollment.
+     */
+    public function forEnrolledStudent($userId) {
+        $stmt = $this->db->prepare("
+            SELECT e.*, c.name as category_name, co.title as course_title
+            FROM exams e
+            LEFT JOIN categories c ON e.category_id = c.id
+            INNER JOIN courses co ON e.course_id = co.id
+            INNER JOIN course_enrollments ce ON ce.course_id = co.id
+            WHERE e.status = 'published'
+              AND ce.student_id = ?
+              AND ce.status = 'active'
+            ORDER BY e.start_date IS NULL, e.start_date ASC, e.created_at DESC
+        ");
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll();
+    }
+
+    /**
      * Get all exams (admin view)
      */
     public function all($filters = []) {
