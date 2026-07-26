@@ -10,31 +10,8 @@ class Question {
     private $db;
 
     public function __construct() {
+        // Columns are defined once in the canonical /sql/schema.sql — no per-request ALTER TABLE checks here.
         $this->db = Database::getInstance()->getConnection();
-        $this->ensureSchemaUpgraded();
-    }
-
-    /**
-     * Upgrades/ensures the questions table matches the required NGN specifications
-     */
-    private function ensureSchemaUpgraded() {
-        $driver = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME);
-
-        // Try adding required NGN columns to the questions table
-        $columnsToAdd = [
-            'case_id' => 'INT NULL',
-            'case_order' => 'INT NULL',
-            'question_data' => 'TEXT NULL',
-            'scoring_method' => "VARCHAR(50) DEFAULT 'all_or_nothing'"
-        ];
-
-        foreach ($columnsToAdd as $col => $definition) {
-            try {
-                $this->db->exec("ALTER TABLE questions ADD COLUMN {$col} {$definition}");
-            } catch (PDOException $e) {
-                // Ignore column already exists errors
-            }
-        }
     }
 
     /**

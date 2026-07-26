@@ -9,18 +9,8 @@ class Course {
     private $db;
 
     public function __construct() {
+        // Columns are defined once in the canonical /sql/schema.sql — no per-request ALTER TABLE checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Robust SQLite/MySQL resilient check/add to ensure columns always exist
-        try {
-            @$this->db->exec("ALTER TABLE courses ADD COLUMN category_id INT NULL");
-        } catch (Exception $e) {}
-        try {
-            @$this->db->exec("ALTER TABLE courses ADD COLUMN thumbnail VARCHAR(255) NULL");
-        } catch (Exception $e) {}
-        try {
-            @$this->db->exec("ALTER TABLE courses ADD COLUMN pass_percentage DECIMAL(5,2) NOT NULL DEFAULT 50.00");
-        } catch (Exception $e) {}
     }
 
     /**

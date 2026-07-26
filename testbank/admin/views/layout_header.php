@@ -358,7 +358,7 @@ $activeRoute = $_GET['route'] ?? '';
         <?php
         $mailboxUnreadCount = 0;
         if (Auth::isLoggedIn()) {
-            require_once __DIR__ . '/../../site/models/Message.php';
+            require_once __DIR__ . '/../../includes/Message.php';
             $mailboxUnreadCount = Message::unreadCount($currentUser['id']);
         }
         ?>

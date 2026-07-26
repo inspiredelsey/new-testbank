@@ -48,7 +48,7 @@ include __DIR__ . '/../layout_header.php';
                                 /**
                                  * Recursive function to render tree rows with nested indentation
                                  */
-                                function renderRecursiveTree($nodes, $depth = 0, $csrfToken) {
+                                function renderRecursiveTree($nodes, $csrfToken, $depth = 0) {
                                     foreach ($nodes as $node) {
                                         // 8 spaces per indentation level for beautiful, clear visual hierarchy
                                         $indent = str_repeat('&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;', $depth);
@@ -88,12 +88,12 @@ include __DIR__ . '/../layout_header.php';
                                         </tr>
                                         <?php
                                         if (!empty($node['children'])) {
-                                            renderRecursiveTree($node['children'], $depth + 1, $csrfToken);
+                                            renderRecursiveTree($node['children'], $csrfToken, $depth + 1);
                                         }
                                     }
                                 }
 
-                                renderRecursiveTree($categoryTree, 0, $csrfToken);
+                                renderRecursiveTree($categoryTree, $csrfToken, 0);
                                 ?>
                             </tbody>
                         </table>

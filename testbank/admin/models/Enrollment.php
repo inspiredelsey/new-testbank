@@ -10,15 +10,8 @@ class Enrollment {
     private $db;
 
     public function __construct() {
+        // Columns are defined once in the canonical /sql/schema.sql — no per-request ALTER TABLE checks here.
         $this->db = Database::getInstance()->getConnection();
-        
-        // Ensure necessary additions to the course_enrollments schema are active on both MySQL and SQLite fallback
-        try {
-            @$this->db->exec("ALTER TABLE course_enrollments ADD COLUMN group_id INT NULL");
-        } catch (Exception $e) {}
-        try {
-            @$this->db->exec("ALTER TABLE course_enrollments ADD COLUMN status VARCHAR(50) NOT NULL DEFAULT 'active'");
-        } catch (Exception $e) {}
     }
 
     /**

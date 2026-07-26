@@ -7,7 +7,7 @@
 require_once __DIR__ . '/../../includes/Auth.php';
 require_once __DIR__ . '/../../includes/CSRF.php';
 require_once __DIR__ . '/../../includes/ActivityLogger.php';
-require_once __DIR__ . '/../models/Message.php';
+require_once __DIR__ . '/../../includes/Message.php';
 require_once __DIR__ . '/../../admin/models/Course.php';
 
 class MailboxController {
