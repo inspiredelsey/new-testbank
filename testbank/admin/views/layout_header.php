@@ -309,6 +309,27 @@ $activeRoute = $_GET['route'] ?? '';
         .cursor-pointer {
             cursor: pointer;
         }
+
+        /* Profile Dropdown Hover & Focus styling */
+        .profile-dropdown {
+            position: relative;
+        }
+        .profile-dropdown .dropdown-menu {
+            right: 0 !important;
+            left: auto !important;
+            top: 100% !important;
+        }
+        @media (min-width: 992px) {
+            .profile-dropdown:hover > .dropdown-menu {
+                display: block;
+                margin-top: 0;
+            }
+        }
+        .profile-icon-btn:focus-visible,
+        .profile-dropdown .dropdown-item:focus-visible {
+            outline: 2px solid var(--primary-indigo) !important;
+            outline-offset: 2px !important;
+        }
         @media (max-width: 991.98px) {
             .sidebar {
                 width: 100%;
@@ -473,6 +494,10 @@ $activeRoute = $_GET['route'] ?? '';
                 <?php echo htmlspecialchars($pageTitle ?? 'Admin Dashboard'); ?>
             </h4>
             <div class="d-flex align-items-center gap-3">
+                <a href="index.php?route=courses" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 text-decoration-none fw-medium">
+                    <i data-lucide="book-open" size="16"></i> Courses
+                </a>
+
                 <?php if (Auth::isInstructor()): ?>
                     <?php if (strpos($activeRoute, 'student/') !== false): ?>
                         <a class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" href="index.php?route=admin/courses">
@@ -483,11 +508,74 @@ $activeRoute = $_GET['route'] ?? '';
                             <i data-lucide="book-open" size="16"></i> Go to Student Portal
                         </a>
                     <?php endif; ?>
-                <?php else: ?>
-                    <span class="text-muted small font-sans"><i data-lucide="shield" size="14"></i> Student Mode</span>
                 <?php endif; ?>
+
+                <div class="dropdown profile-dropdown">
+                    <button class="btn btn-light rounded-circle p-0 d-flex align-items-center justify-content-center border shadow-sm profile-icon-btn"
+                            type="button"
+                            id="userProfileDropdown"
+                            data-bs-toggle="dropdown"
+                            data-bs-display="static"
+                            aria-expanded="false"
+                            style="width: 38px; height: 38px; background-color: var(--primary-indigo-subtle); color: var(--primary-indigo); border-color: var(--border-light) !important;"
+                            aria-label="User profile menu">
+                        <i data-lucide="circle-user" size="22"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border mt-2 p-2" aria-labelledby="userProfileDropdown" style="min-width: 230px;">
+                        <li class="px-3 py-2 border-bottom mb-1 bg-light rounded-top">
+                            <div class="fw-bold text-dark text-truncate" style="font-size: 0.875rem;">
+                                <?php echo htmlspecialchars($currentUser['name'] ?? 'User'); ?>
+                            </div>
+                            <div class="text-muted text-truncate" style="font-size: 0.75rem;">
+                                <?php echo htmlspecialchars($currentUser['email'] ?? ''); ?>
+                            </div>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small" href="index.php?route=account/profile">
+                                <i data-lucide="user" size="16"></i>
+                                <span>Profile Information</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small" href="index.php?route=account/settings">
+                                <i data-lucide="settings" size="16"></i>
+                                <span>Account Settings</span>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small text-danger" href="index.php?route=logout">
+                                <i data-lucide="log-out" size="16"></i>
+                                <span>Sign Out</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const profileDropdown = document.querySelector('.profile-dropdown');
+            if (profileDropdown) {
+                const toggleBtn = profileDropdown.querySelector('[data-bs-toggle="dropdown"]');
+                const menu = profileDropdown.querySelector('.dropdown-menu');
+                
+                profileDropdown.addEventListener('mouseenter', function() {
+                    if (window.innerWidth >= 992 && toggleBtn && menu) {
+                        menu.classList.add('show');
+                        toggleBtn.setAttribute('aria-expanded', 'true');
+                    }
+                });
+                profileDropdown.addEventListener('mouseleave', function() {
+                    if (window.innerWidth >= 992 && toggleBtn && menu) {
+                        menu.classList.remove('show');
+                        toggleBtn.setAttribute('aria-expanded', 'false');
+                    }
+                });
+            }
+        });
+        </script>
 
         <?php if (!empty($_GET['success'])): ?>
             <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm rounded-3 p-3 mb-4" role="alert">
