@@ -1,27 +1,16 @@
 #!/bin/bash
 
-# Ensure PHP binary exists
-if ! command -v php &> /dev/null; then
+# Ensure PHP binary exists and works
+if ! php -v &> /dev/null; then
     if [ -f /usr/bin/php8.2 ]; then
         ln -sf /usr/bin/php8.2 /usr/bin/php
-    else
-        apt-get update && apt-get install -y php-cli php-sqlite3 php-mysql php-mbstring
-        ln -sf /usr/bin/php8.2 /usr/bin/php || true
     fi
-fi
-
-# Ensure PHP extensions INI is configured
-if [ ! -f /etc/php/8.2/cli/conf.d/20-extensions.ini ]; then
-    mkdir -p /etc/php/8.2/cli/conf.d/
-    cat << 'EOF' > /etc/php/8.2/cli/conf.d/20-extensions.ini
-extension=pdo.so
-extension=pdo_sqlite.so
-extension=mysqlnd.so
-extension=pdo_mysql.so
-extension=mbstring.so
-extension=sqlite3.so
-extension=mysqli.so
-EOF
+    if ! php -v &> /dev/null; then
+        apt-get update && apt-get install -y php-cli php-sqlite3 php-mysql php-mbstring
+        if [ -f /usr/bin/php8.2 ]; then
+            ln -sf /usr/bin/php8.2 /usr/bin/php
+        fi
+    fi
 fi
 
 # Ensure config.php exists

@@ -32,7 +32,10 @@ if (empty($route)) {
             header("Location: index.php?route=student/dashboard");
         }
     } else {
-        header("Location: index.php?route=login");
+        // Anonymous visitors now land on the public course catalog
+        // (browse/search freely) instead of being forced to log in first.
+        // Logged-in behavior above is completely unchanged.
+        header("Location: index.php?route=courses");
     }
     exit;
 }
@@ -184,6 +187,36 @@ switch ($route) {
         break;
 
     // ---------------- STUDENT ROUTES ----------------
+    case 'courses':
+        require_once __DIR__ . '/testbank/site/controllers/CourseCatalogController.php';
+        $controller = new CourseCatalogController();
+        $controller->handleRequest('list');
+        break;
+
+    case 'course/details':
+        require_once __DIR__ . '/testbank/site/controllers/CourseCatalogController.php';
+        $controller = new CourseCatalogController();
+        $controller->handleRequest('details');
+        break;
+
+    case 'course/checkout':
+        require_once __DIR__ . '/testbank/site/controllers/CourseCatalogController.php';
+        $controller = new CourseCatalogController();
+        $controller->handleRequest('checkout');
+        break;
+
+    case 'course/checkout_submit':
+        require_once __DIR__ . '/testbank/site/controllers/CourseCatalogController.php';
+        $controller = new CourseCatalogController();
+        $controller->handleRequest('checkout_submit');
+        break;
+
+    case 'course/checkout/callback':
+        require_once __DIR__ . '/testbank/site/controllers/CourseCatalogController.php';
+        $controller = new CourseCatalogController();
+        $controller->handleRequest('checkout_callback');
+        break;
+
     case 'student/course/view':
         require_once __DIR__ . '/testbank/site/controllers/LearningPathController.php';
         $controller = new LearningPathController();
