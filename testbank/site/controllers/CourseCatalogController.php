@@ -1,14 +1,12 @@
 <?php
 /**
  * Course Catalog Controller - Test Bank LMS
- * Lets any logged-in user (student or instructor) browse published courses
- * and view a course's public details page before enrolling. Distinct from
- * LearningPathController's 'student/course/view', which shows the actual
- * course CONTENT to students already enrolled — this controller is the
- * "browse and decide" experience that comes before enrollment.
+ * Lets any logged-in user or public visitor browse published courses,
+ * filter by categories/search, and view details or enroll.
  */
 
 require_once __DIR__ . '/../../admin/models/Course.php';
+require_once __DIR__ . '/../../admin/models/Category.php';
 require_once __DIR__ . '/../../admin/models/LearningPathItem.php';
 require_once __DIR__ . '/../../includes/Auth.php';
 require_once __DIR__ . '/../../includes/Database.php';
@@ -19,9 +17,6 @@ class CourseCatalogController {
     private $db;
 
     public function __construct() {
-        // No blanket Auth::requireLogin() here — this catalog is now the
-        // public landing experience too. $user will simply be null for
-        // anonymous visitors; all methods below are written to handle that.
         $this->courseModel = new Course();
         $this->learningPathItemModel = new LearningPathItem();
         $this->db = Database::getInstance()->getConnection();
@@ -40,22 +35,56 @@ class CourseCatalogController {
     }
 
     private function handleList() {
-        $user = Auth::getUser(); // null if not logged in — that's fine here
+        $user = Auth::getUser(); // null if not logged in
         $search = trim($_GET['search'] ?? '');
+        $selectedCategory = intval($_GET['category_id'] ?? 0);
+        $sort = trim($_GET['sort'] ?? 'newest');
 
         $filters = ['status' => 'published'];
         if ($search !== '') {
             $filters['search'] = $search;
         }
+        if ($selectedCategory > 0) {
+            $filters['category_id'] = $selectedCategory;
+        }
+
         $courses = $this->courseModel->getAll($filters);
 
-        // Mark which courses this user is already enrolled in, so the
-        // catalog can show "Enrolled" instead of "View Details" where
-        // relevant. Anonymous visitors are never "enrolled" in anything.
+        // Sorting
+        if ($sort === 'popular') {
+            usort($courses, function($a, $b) {
+                return intval($b['enrollment_count'] ?? 0) <=> intval($a['enrollment_count'] ?? 0);
+            });
+        } elseif ($sort === 'title') {
+            usort($courses, function($a, $b) {
+                return strcasecmp($a['title'], $b['title']);
+            });
+        }
+
+        // Mark enrollment
         foreach ($courses as &$course) {
             $course['is_enrolled'] = $user ? $this->courseModel->isEnrolled($course['id'], $user['id']) : false;
         }
         unset($course);
+
+        // Categories list
+        $categoryModel = new Category();
+        $categories = $categoryModel->all();
+
+        // Platform stats
+        $statsStmt = $this->db->query("
+            SELECT 
+                (SELECT COUNT(*) FROM courses WHERE status = 'published') as course_count,
+                (SELECT COUNT(*) FROM exams WHERE status = 'published') as exam_count,
+                (SELECT COUNT(DISTINCT student_id) FROM course_enrollments) as student_count,
+                (SELECT COUNT(*) FROM questions) as question_count
+        ");
+        $stats = $statsStmt ? $statsStmt->fetch(PDO::FETCH_ASSOC) : [
+            'course_count' => count($courses),
+            'exam_count' => 0,
+            'student_count' => 0,
+            'question_count' => 0
+        ];
 
         include __DIR__ . '/../views/courses/catalog.php';
     }
