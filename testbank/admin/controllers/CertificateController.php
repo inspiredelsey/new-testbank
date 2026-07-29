@@ -114,7 +114,7 @@ class CertificateController {
                 } elseif ($fileSize > 5 * 1024 * 1024) { // 5MB limit
                     $errors['background_image'] = "Background image cannot exceed 5MB.";
                 } else {
-                    $uploadDir = __DIR__ . '/../../uploads/certificates/backgrounds/';
+                    $uploadDir = __DIR__ . '/../../../uploads/certificates/backgrounds/';
                     if (!is_dir($uploadDir)) {
                         mkdir($uploadDir, 0777, true);
                     }
@@ -240,7 +240,7 @@ class CertificateController {
         // Check ownership
         $this->requireCourseOwnershipOrAdmin($course);
 
-        $fullPath = __DIR__ . '/../../' . $cert['pdf_path'];
+        $fullPath = __DIR__ . '/../../../' . $cert['pdf_path'];
         if (!file_exists($fullPath)) {
             http_response_code(404);
             echo "Certificate PDF file not found on disk.";

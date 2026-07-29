@@ -134,7 +134,7 @@ class Document {
                 $filePath = $doc['file_path'];
                 
                 // 1. Check relative to root directory (since it is saved as e.g. "uploads/...")
-                $fullPath = __DIR__ . '/../../' . ltrim($filePath, '/');
+                $fullPath = __DIR__ . '/../../../' . ltrim($filePath, '/');
                 if (file_exists($fullPath) && is_file($fullPath)) {
                     @unlink($fullPath);
                 } else {

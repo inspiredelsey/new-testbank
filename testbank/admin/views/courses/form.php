@@ -101,6 +101,42 @@ include __DIR__ . '/../layout_header.php';
                             </div>
                             <small class="text-muted font-sans small mt-1 d-block">Required passing score for exams within this course.</small>
                         </div>
+
+                        <!-- Price -->
+                        <div class="col-md-8 mb-4">
+                            <label for="coursePrice" class="form-label">Price <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number"
+                                       name="price"
+                                       id="coursePrice"
+                                       min="0"
+                                       step="0.01"
+                                       class="form-control <?php echo isset($errors['price']) ? 'is-invalid' : ''; ?>"
+                                       placeholder="e.g. 49.99"
+                                       value="<?php echo htmlspecialchars($formData['price'] ?? '0.00'); ?>"
+                                       required>
+                                <?php if (isset($errors['price'])): ?>
+                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['price']); ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <small class="text-muted font-sans small mt-1 d-block">Students pay this amount to enroll.</small>
+                        </div>
+
+                        <!-- Currency -->
+                        <div class="col-md-4 mb-4">
+                            <label for="courseCurrency" class="form-label">Currency <span class="text-danger">*</span></label>
+                            <select name="currency" id="courseCurrency" class="form-select <?php echo isset($errors['currency']) ? 'is-invalid' : ''; ?>">
+                                <?php
+                                $currentCurrency = $formData['currency'] ?? 'USD';
+                                foreach (['USD', 'EUR', 'GBP', 'NGN'] as $curr):
+                                ?>
+                                    <option value="<?php echo $curr; ?>" <?php echo ($currentCurrency === $curr) ? 'selected' : ''; ?>><?php echo $curr; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if (isset($errors['currency'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['currency']); ?></div>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="row align-items-center">

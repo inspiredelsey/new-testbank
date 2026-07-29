@@ -196,6 +196,8 @@ class CourseController {
         
         $status = $_POST['status'] ?? 'draft';
         $passPercentage = isset($_POST['pass_percentage']) ? trim($_POST['pass_percentage']) : '';
+        $price = isset($_POST['price']) ? trim($_POST['price']) : '';
+        $currency = trim($_POST['currency'] ?? 'USD');
 
         $errors = [];
 
@@ -238,6 +240,16 @@ class CourseController {
             }
         }
 
+        // Validate price (all courses are paid, so this is required)
+        if ($price === '') {
+            $errors['price'] = "Price is required.";
+        } elseif (!is_numeric($price) || floatval($price) < 0) {
+            $errors['price'] = "Price must be a non-negative number.";
+        }
+        if (empty($currency) || strlen($currency) !== 3) {
+            $errors['currency'] = "Currency must be a valid 3-letter code (e.g. USD).";
+        }
+
         // Validate status
         if (!in_array($status, ['draft', 'published', 'archived'])) {
             $errors['status'] = "Invalid status selected.";
@@ -262,7 +274,7 @@ class CourseController {
                     if (!in_array($mimeType, $allowedMimes)) {
                         $errors['thumbnail'] = "Only JPG, PNG, GIF, and WEBP images are allowed.";
                     } else {
-                        $uploadDir = __DIR__ . '/../../uploads/';
+                        $uploadDir = __DIR__ . '/../../../uploads/';
                         if (!is_dir($uploadDir)) {
                             mkdir($uploadDir, 0777, true);
                         }
@@ -293,7 +305,9 @@ class CourseController {
                 'instructor_id' => $instructorId,
                 'thumbnail' => $thumbnailPath,
                 'status' => $status,
-                'pass_percentage' => floatval($passPercentage)
+                'pass_percentage' => floatval($passPercentage),
+                'price' => floatval($price),
+                'currency' => strtoupper($currency)
             ]);
             header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course successfully created."));
             exit;
@@ -370,6 +384,8 @@ class CourseController {
         
         $status = $_POST['status'] ?? 'draft';
         $passPercentage = isset($_POST['pass_percentage']) ? trim($_POST['pass_percentage']) : '';
+        $price = isset($_POST['price']) ? trim($_POST['price']) : '';
+        $currency = trim($_POST['currency'] ?? 'USD');
 
         $errors = [];
 
@@ -412,6 +428,16 @@ class CourseController {
             }
         }
 
+        // Validate price (all courses are paid, so this is required)
+        if ($price === '') {
+            $errors['price'] = "Price is required.";
+        } elseif (!is_numeric($price) || floatval($price) < 0) {
+            $errors['price'] = "Price must be a non-negative number.";
+        }
+        if (empty($currency) || strlen($currency) !== 3) {
+            $errors['currency'] = "Currency must be a valid 3-letter code (e.g. USD).";
+        }
+
         // Validate status
         if (!in_array($status, ['draft', 'published', 'archived'])) {
             $errors['status'] = "Invalid status selected.";
@@ -436,7 +462,7 @@ class CourseController {
                     if (!in_array($mimeType, $allowedMimes)) {
                         $errors['thumbnail'] = "Only JPG, PNG, GIF, and WEBP images are allowed.";
                     } else {
-                        $uploadDir = __DIR__ . '/../../uploads/';
+                        $uploadDir = __DIR__ . '/../../../uploads/';
                         if (!is_dir($uploadDir)) {
                             mkdir($uploadDir, 0777, true);
                         }
@@ -477,7 +503,9 @@ class CourseController {
                 'instructor_id' => $instructorId,
                 'thumbnail' => $thumbnailPath,
                 'status' => $status,
-                'pass_percentage' => floatval($passPercentage)
+                'pass_percentage' => floatval($passPercentage),
+                'price' => floatval($price),
+                'currency' => strtoupper($currency)
             ]);
             header("Location: index.php?route=admin/courses&action=list&success=" . urlencode("Course successfully updated."));
             exit;
@@ -636,7 +664,7 @@ class CourseController {
             $fileName = $_FILES['doc_file']['name'];
             $fileType = pathinfo($fileName, PATHINFO_EXTENSION);
             
-            $uploadDir = __DIR__ . '/../../uploads/';
+            $uploadDir = __DIR__ . '/../../../uploads/';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
@@ -652,7 +680,7 @@ class CourseController {
             $fileName = trim($_POST['file_name_text']);
             $fileType = pathinfo($fileName, PATHINFO_EXTENSION) ?: 'pdf';
             
-            $uploadDir = __DIR__ . '/../../uploads/';
+            $uploadDir = __DIR__ . '/../../../uploads/';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }

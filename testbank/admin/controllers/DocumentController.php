@@ -92,6 +92,16 @@ class DocumentController {
         $description = '';
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // If the request body exceeded PHP's post_max_size, PHP silently
+            // empties $_POST and $_FILES entirely before this script even
+            // runs — which would otherwise surface as a confusing "Security
+            // token validation failed" message below. Detect that specific
+            // signature first and give the real, correct reason instead.
+            if (empty($_POST) && empty($_FILES) && intval($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+                header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("The file you tried to upload is too large for the server to accept. Please try a smaller file."));
+                exit;
+            }
+
             $token = $_POST['csrf_token'] ?? '';
             if (!Session::validateCSRF($token)) {
                 header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
@@ -144,7 +154,7 @@ class DocumentController {
 
             if (empty($errors)) {
                 // Ensure target directory exists
-                $uploadDir = __DIR__ . '/../../uploads/documents/' . $courseId . '/';
+                $uploadDir = __DIR__ . '/../../../uploads/documents/' . $courseId . '/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
@@ -230,6 +240,16 @@ class DocumentController {
         $description = $doc['description'];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // If the request body exceeded PHP's post_max_size, PHP silently
+            // empties $_POST and $_FILES entirely before this script even
+            // runs — which would otherwise surface as a confusing "Security
+            // token validation failed" message below. Detect that specific
+            // signature first and give the real, correct reason instead.
+            if (empty($_POST) && empty($_FILES) && intval($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+                header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("The file you tried to upload is too large for the server to accept. Please try a smaller file."));
+                exit;
+            }
+
             $token = $_POST['csrf_token'] ?? '';
             if (!Session::validateCSRF($token)) {
                 header("Location: index.php?route=admin/courses&action=list&error=" . urlencode("Security token validation failed."));
@@ -283,7 +303,7 @@ class DocumentController {
             if (empty($errors)) {
                 $uploadSuccess = true;
                 if ($newFileUploaded) {
-                    $uploadDir = __DIR__ . '/../../uploads/documents/' . $courseId . '/';
+                    $uploadDir = __DIR__ . '/../../../uploads/documents/' . $courseId . '/';
                     if (!is_dir($uploadDir)) {
                         mkdir($uploadDir, 0777, true);
                     }
@@ -313,7 +333,7 @@ class DocumentController {
                         }
 
                         // Safely unlink the previous physical file to prevent dangling files
-                        $oldPath = __DIR__ . '/../../' . ltrim($doc['file_path'], '/');
+                        $oldPath = __DIR__ . '/../../../' . ltrim($doc['file_path'], '/');
                         if (file_exists($oldPath) && is_file($oldPath)) {
                             @unlink($oldPath);
                         }

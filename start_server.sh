@@ -13,29 +13,22 @@ if ! php -v &> /dev/null; then
     fi
 fi
 
-# Ensure PHP PDO extensions are configured in cli ini
-if [ -d /etc/php/8.2/cli/conf.d ] && [ ! -f /etc/php/8.2/cli/conf.d/99-extensions.ini ]; then
-    cat << 'EOF' > /etc/php/8.2/cli/conf.d/99-extensions.ini
-extension_dir = "/usr/lib/php/20220829/"
-extension=pdo.so
-extension=pdo_sqlite.so
-extension=sqlite3.so
-extension=mysqlnd.so
-extension=pdo_mysql.so
-extension=mysqli.so
-extension=mbstring.so
-extension=gd.so
-extension=xml.so
-extension=dom.so
-EOF
-fi
-
 # Ensure config.php exists
 if [ ! -f testbank/config/config.php ] && [ -f testbank/config/config.sample.php ]; then
     cp testbank/config/config.sample.php testbank/config/config.php
 fi
 
 echo "Starting Test Bank LMS server on 0.0.0.0:3000..."
-exec php -S 0.0.0.0:3000
-
+# Explicit -d flags here because this app runs on PHP's built-in server
+# (not Apache/PHP-FPM), so neither .htaccess nor .user.ini have any effect —
+# these are the only settings that actually reach this PHP process. Without
+# this, PHP's stock Ubuntu defaults (commonly 2M/8M) silently reject any
+# document/thumbnail upload larger than that, even though the app's own
+# validation logic already allows up to 20MB for documents.
+exec php \
+    -d upload_max_filesize=25M \
+    -d post_max_size=30M \
+    -d max_execution_time=300 \
+    -d memory_limit=256M \
+    -S 0.0.0.0:3000
 

@@ -114,8 +114,8 @@ class Course {
      */
     public function create($data) {
         $stmt = $this->db->prepare("
-            INSERT INTO courses (title, description, category_id, instructor_id, thumbnail, status, pass_percentage)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO courses (title, description, category_id, instructor_id, thumbnail, status, pass_percentage, price, currency)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $data['title'],
@@ -124,7 +124,9 @@ class Course {
             !empty($data['instructor_id']) ? intval($data['instructor_id']) : null,
             $data['thumbnail'] ?? null,
             $data['status'] ?? 'draft',
-            isset($data['pass_percentage']) ? floatval($data['pass_percentage']) : 50.00
+            isset($data['pass_percentage']) ? floatval($data['pass_percentage']) : 50.00,
+            isset($data['price']) ? floatval($data['price']) : 0.00,
+            $data['currency'] ?? 'USD'
         ]);
         return $this->db->lastInsertId();
     }
@@ -135,7 +137,7 @@ class Course {
     public function update($id, $data) {
         $stmt = $this->db->prepare("
             UPDATE courses 
-            SET title = ?, description = ?, category_id = ?, instructor_id = ?, thumbnail = ?, status = ?, pass_percentage = ?
+            SET title = ?, description = ?, category_id = ?, instructor_id = ?, thumbnail = ?, status = ?, pass_percentage = ?, price = ?, currency = ?
             WHERE id = ?
         ");
         return $stmt->execute([
@@ -146,6 +148,8 @@ class Course {
             $data['thumbnail'] ?? null,
             $data['status'] ?? 'draft',
             isset($data['pass_percentage']) ? floatval($data['pass_percentage']) : 50.00,
+            isset($data['price']) ? floatval($data['price']) : 0.00,
+            $data['currency'] ?? 'USD',
             $id
         ]);
     }
