@@ -67,11 +67,13 @@ class AttemptModel {
         $stmtInsert->execute([$examId, $userId, $startedAt, $resolvedQuestionIdsJson]);
         $attemptId = $this->db->lastInsertId();
 
-        // Pre-initialize answers rows for each question
+        // Pre-initialize answers rows for each question. This is always a
+        // fresh $attemptId (just created above), so no duplicate row can
+        // possibly already exist — a plain INSERT is correct and portable
+        // across both MySQL and SQLite (no upsert syntax needed here).
         $stmtAnsInit = $this->db->prepare("
             INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
             VALUES (?, ?, NULL, 0)
-            ON DUPLICATE KEY UPDATE attempt_id = VALUES(attempt_id)
         ");
         foreach ($questionIds as $qId) {
             $stmtAnsInit->execute([$attemptId, $qId]);
@@ -186,13 +188,29 @@ class AttemptModel {
         $needsManualGrading = ($qType === 'essay') ? 1 : 0;
         $answerDataJson = json_encode($answerData);
 
-        // Atomic MySQL upsert
-        $stmtUpsert = $this->db->prepare("
-            INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE answer_data = VALUES(answer_data), needs_manual_grading = VALUES(needs_manual_grading)
-        ");
-        return $stmtUpsert->execute([$attemptId, $questionId, $answerDataJson, $needsManualGrading]);
+        // Portable upsert (works identically on MySQL and SQLite): the
+        // pre-initialization step above guarantees a row already exists
+        // for every (attempt_id, question_id) pair on a valid attempt, so
+        // this is normally an UPDATE — but check first rather than assume,
+        // and fall back to INSERT if no row is found for any reason.
+        $existsStmt = $this->db->prepare("SELECT id FROM attempt_answers WHERE attempt_id = ? AND question_id = ?");
+        $existsStmt->execute([$attemptId, $questionId]);
+        $existingId = $existsStmt->fetchColumn();
+
+        if ($existingId) {
+            $updateStmt = $this->db->prepare("
+                UPDATE attempt_answers
+                SET answer_data = ?, needs_manual_grading = ?
+                WHERE id = ?
+            ");
+            return $updateStmt->execute([$answerDataJson, $needsManualGrading, $existingId]);
+        } else {
+            $insertStmt = $this->db->prepare("
+                INSERT INTO attempt_answers (attempt_id, question_id, answer_data, needs_manual_grading)
+                VALUES (?, ?, ?, ?)
+            ");
+            return $insertStmt->execute([$attemptId, $questionId, $answerDataJson, $needsManualGrading]);
+        }
     }
 
     /**

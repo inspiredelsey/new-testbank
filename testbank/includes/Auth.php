@@ -7,6 +7,24 @@ require_once __DIR__ . '/Session.php';
 require_once __DIR__ . '/Database.php';
 
 class Auth {
+    /**
+     * Logs a user in directly by their already-verified row data, without
+     * re-checking a password. Used ONLY after a server-side-verified payment
+     * confirms who the user is — never exposed to any form input directly.
+     * New method — login() below is untouched.
+     */
+    public static function loginAs($user) {
+        Session::start();
+        Session::regenerate();
+        Session::set('user_id', $user['id']);
+        Session::set('user_name', $user['name']);
+        Session::set('user_email', $user['email']);
+        Session::set('user_role', $user['role']);
+
+        require_once __DIR__ . '/ActivityLogger.php';
+        ActivityLogger::log($user['id'], 'login');
+    }
+
     public static function login($email, $password) {
         Session::start();
         $db = Database::getInstance()->getConnection();

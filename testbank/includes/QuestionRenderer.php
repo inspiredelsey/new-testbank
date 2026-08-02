@@ -846,7 +846,7 @@ class QuestionRenderer {
             $ansData = json_decode($ansData, true);
         }
 
-        $options = $question['options'] ?? [];
+        $options = $qData['options'] ?? [];
 
         // Build HTML wrapper
         $html = "<div class='card border-0 shadow-sm rounded-3 overflow-hidden mb-3 interactive-question-card' id='interactive-q-{$qId}' data-question-id='{$qId}' data-type='{$type}'>";
@@ -876,7 +876,7 @@ class QuestionRenderer {
                     $html .= "
                     <label class='form-check option-item p-3 mb-1 rounded border border-light-subtle d-flex align-items-center gap-3 cursor-pointer hover-bg-light transition-all'>
                         <input class='form-check-input mt-0' type='radio' name='q_{$qId}' value='{$opt['id']}' {$checked} onchange='onMCQSingleChange({$qId}, this.value)' style='cursor: pointer;'>
-                        <span class='font-sans'>".htmlspecialchars($opt['option_text'] ?? '')."</span>
+                        <span class='font-sans'>".htmlspecialchars($opt['text'] ?? '')."</span>
                     </label>";
                 }
                 $html .= "</div>";
@@ -905,7 +905,7 @@ class QuestionRenderer {
                     $html .= "
                     <label class='form-check option-item p-3 mb-1 rounded border border-light-subtle d-flex align-items-center gap-3 cursor-pointer hover-bg-light transition-all'>
                         <input class='form-check-input mt-0' type='checkbox' name='q_{$qId}[]' value='{$opt['id']}' {$checked} onchange='{$onChange}' style='cursor: pointer;'>
-                        <span class='font-sans'>".htmlspecialchars($opt['option_text'] ?? '')."</span>
+                        <span class='font-sans'>".htmlspecialchars($opt['text'] ?? '')."</span>
                     </label>";
                 }
                 $html .= "</div>";

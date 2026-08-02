@@ -82,6 +82,7 @@ class Database {
             $this->pdo->exec(file_get_contents($sqlPath));
         }
         $this->seedAdminIfEmpty();
+        $this->seedTestDataIfEmpty();
     }
 
     /**
@@ -135,6 +136,7 @@ class Database {
             }
         }
         $this->seedAdminIfEmpty();
+        $this->seedTestDataIfEmpty();
     }
 
     /**
@@ -235,6 +237,50 @@ class Database {
             $adminPass = password_hash($this->config['defaults']['admin_password'] ?? 'admin123', PASSWORD_DEFAULT);
             $stmt = $this->pdo->prepare("INSERT INTO users (name, email, password_hash, role, status) VALUES (?, ?, ?, 'admin', 'active')");
             $stmt->execute(['Administrator', $adminEmail, $adminPass]);
+        }
+    }
+
+    private function seedTestDataIfEmpty() {
+        try {
+            $checkCourses = $this->pdo->query("SELECT COUNT(*) as cnt FROM courses")->fetch();
+            if ($checkCourses && intval($checkCourses['cnt']) > 0) {
+                return;
+            }
+
+            $seedPath = __DIR__ . '/../../sql/seed.sql';
+            if (!file_exists($seedPath)) {
+                return;
+            }
+
+            $sql = file_get_contents($seedPath);
+            $sql = preg_replace('/^\s*--.*$/m', '', $sql);
+            $statements = array_filter(array_map('trim', explode(';', $sql)));
+
+            $vars = [];
+            foreach ($statements as $stmt) {
+                if (empty($stmt)) {
+                    continue;
+                }
+
+                if ($this->usingFallback) {
+                    foreach ($vars as $varName => $varValue) {
+                        $stmt = str_replace('@' . $varName, $varValue, $stmt);
+                    }
+
+                    if (preg_match('/^SET\s+@(\w+)\s*=\s*LAST_INSERT_ID\(\)/i', $stmt, $m)) {
+                        $vars[$m[1]] = $this->pdo->lastInsertId();
+                        continue;
+                    }
+                }
+
+                try {
+                    $this->pdo->exec($stmt);
+                } catch (Exception $e) {
+                    error_log("Seed statement failed: " . $e->getMessage() . " | SQL: " . $stmt);
+                }
+            }
+        } catch (Exception $e) {
+            error_log("seedTestDataIfEmpty error: " . $e->getMessage());
         }
     }
 
