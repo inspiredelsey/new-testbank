@@ -361,8 +361,17 @@ class CourseCatalogController {
         $freshUser = $userRow->fetch();
         Auth::loginAs($freshUser);
 
-        header("Location: index.php?route=student/course/view&id=" . $pending['course_id'] . "&enrolled=1");
-        exit;
+        // Show a real order-confirmation page rather than silently
+        // redirecting straight into the course — the person just paid for
+        // something and deserves a clear "this worked" moment first.
+        $user = $freshUser;
+        $course = $this->courseModel->find($pending['course_id']);
+        $orderReference = strtoupper(substr($token, 0, 10));
+        $gateway = $pending['gateway'];
+        $amount = $pending['amount'];
+        $currency = $pending['currency'];
+
+        include __DIR__ . '/../views/courses/checkout_success.php';
     }
 
     private function renderError($msg) {
