@@ -6,10 +6,26 @@ if ! php -v &> /dev/null; then
         ln -sf /usr/bin/php8.2 /usr/bin/php
     fi
     if ! php -v &> /dev/null; then
-        apt-get update && apt-get install -y php-cli php-sqlite3 php-mysql php-mbstring
+        apt-get update && apt-get install -y php-cli php-sqlite3 php-mysql php-mbstring php-curl
         if [ -f /usr/bin/php8.2 ]; then
             ln -sf /usr/bin/php8.2 /usr/bin/php
         fi
+    fi
+fi
+
+# Ensure the curl extension is present, independent of the block above —
+# that block only runs if PHP itself is missing/broken, so it would never
+# fire once PHP is already working without curl. The payment gateway
+# integration (Stripe/PayPal/Paystack/Flutterwave) requires curl_init(),
+# so check for it explicitly and install it if missing.
+if ! php -r "exit(function_exists('curl_init') ? 0 : 1);" &> /dev/null; then
+    echo "PHP curl extension not found — installing..."
+    apt-get update && apt-get install -y php-curl
+    if [ -f /usr/bin/php8.2 ]; then
+        ln -sf /usr/bin/php8.2 /usr/bin/php
+    fi
+    if ! php -r "exit(function_exists('curl_init') ? 0 : 1);" &> /dev/null; then
+        echo "WARNING: php-curl still not available after install attempt. Payment gateway features will not work."
     fi
 fi
 
