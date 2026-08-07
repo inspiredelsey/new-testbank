@@ -22,5 +22,13 @@ return [
     'defaults' => [
         'admin_email' => 'admin@testbank.com',
         'admin_password' => 'admin123',
+    ],
+    'payments' => [
+        'paystack' => [
+            'secret_key' => 'sk_test_your_actual_key_here',
+        ],
+        'flutterwave' => [
+            'secret_key' => 'FLWSECK_TEST-your_actual_key_here',
+        ],
     ]
 ];

@@ -619,12 +619,6 @@ select:focus-visible,
                             <i data-lucide="lock" size="20"></i>
                             <span>Complete Purchase</span>
                         </button>
-
-                        <div class="checkout-guarantee-row mt-3 text-end text-muted small font-sans d-flex align-items-center justify-content-end gap-3 flex-wrap w-100">
-                            <span class="d-inline-flex align-items-center gap-1.5"><i data-lucide="shield-check" size="15" class="text-mint"></i> 256-bit Encrypted</span>
-                            <span class="d-inline-flex align-items-center gap-1.5"><i data-lucide="zap" size="15" class="text-amber"></i> Instant Portal Access</span>
-                            <span class="d-inline-flex align-items-center gap-1.5"><i data-lucide="refresh-cw" size="15" class="text-blue"></i> Lifetime Updates</span>
-                        </div>
                     </div>
 
                 </form>
@@ -742,6 +736,6 @@ document.addEventListener('DOMContentLoaded', function() {
 if ($isPublicVisitor) {
     include __DIR__ . '/../layout/public_footer.php';
 } else {
-    include __DIR__ . '/../../../admin/views/layout_header.php';
+    include __DIR__ . '/../../../admin/views/layout_footer.php';
 }
 ?>

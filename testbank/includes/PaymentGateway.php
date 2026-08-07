@@ -26,8 +26,8 @@ class PaymentGateway {
             $proto = ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             return $proto . '://' . $_SERVER['HTTP_HOST'];
         }
-        $configPath = __DIR__ . '/testbank/config/config.php';
-        $config = file_exists($configPath) ? require $configPath : [];
+        $configPath = __DIR__ . '/../config/config.php';
+        $config = require $configPath;
         return rtrim($config['app']['url'] ?? '', '/');
     }
 
@@ -254,8 +254,6 @@ class PaymentGateway {
         $appUrl = self::appUrl();
         $callbackUrl = $appUrl . '/index.php?route=course/checkout/callback&gateway=paystack&token=' . urlencode($token);
 
-        // Paystack expects the amount in the currency's smallest subunit
-        // (e.g. kobo for NGN, cents for USD/GHS).
         $body = [
             'email' => $email,
             'amount' => intval(round($amount * 100)),
