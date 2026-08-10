@@ -459,6 +459,11 @@ $activeRoute = $_GET['route'] ?? '';
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link <?php echo (strpos($activeRoute, 'admin/orders') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/orders">
+                        <i data-lucide="receipt"></i> Orders
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link <?php echo (strpos($activeRoute, 'admin/analytics') !== false) ? 'active' : ''; ?>" href="index.php?route=admin/analytics">
                         <i data-lucide="line-chart"></i> Tracking & Analytics
                     </a>

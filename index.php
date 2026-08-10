@@ -172,6 +172,13 @@ switch ($route) {
         $controller->handleRequest($action);
         break;
 
+    case 'admin/orders':
+        require_once __DIR__ . '/testbank/admin/controllers/OrderController.php';
+        $controller = new OrderController();
+        $action = $_GET['action'] ?? 'list';
+        $controller->handleRequest($action);
+        break;
+
     case 'admin/users':
         require_once __DIR__ . '/testbank/admin/controllers/UserController.php';
         $controller = new UserController();

@@ -34,7 +34,21 @@ include __DIR__ . '/../layout_header.php';
                                     <p class="mb-2 text-dark font-sans bg-light p-2 rounded small" style="white-space: pre-line;"><?php echo htmlspecialchars($item['question_text']); ?></p>
                                     
                                     <span class="text-muted small d-block mb-1 fw-medium">Student Answer:</span>
-                                    <p class="mb-0 text-dark font-sans bg-white border p-3 rounded" style="white-space: pre-line;"><?php echo htmlspecialchars(json_decode($item['answer_data'], true) ?: '(Empty response)'); ?></p>
+                                    <?php 
+                                        $decodedAns = json_decode($item['answer_data'], true);
+                                        if (is_array($decodedAns)) {
+                                            $ansText = $decodedAns['text'] ?? ($decodedAns['answer'] ?? implode(', ', array_filter(array_map('strval', $decodedAns), 'is_scalar')));
+                                        } else {
+                                            $ansText = $decodedAns;
+                                        }
+                                        if (empty($ansText) && is_string($item['answer_data'])) {
+                                            $ansText = $item['answer_data'];
+                                        }
+                                        if (!is_string($ansText) && !is_numeric($ansText)) {
+                                            $ansText = json_encode($ansText);
+                                        }
+                                    ?>
+                                    <p class="mb-0 text-dark font-sans bg-white border p-3 rounded" style="white-space: pre-line;"><?php echo htmlspecialchars($ansText ?: '(Empty response)'); ?></p>
                                 </div>
                                 <form action="index.php?route=admin/attempts&action=grade" method="POST" class="row g-2 align-items-center justify-content-end">
                                     <input type="hidden" name="csrf_token" value="<?php echo Session::getCSRFToken(); ?>">
