@@ -45,6 +45,8 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin', 'instructor', 'student') NOT NULL,
   status ENUM('active', 'disabled') NOT NULL DEFAULT 'active',
+  email_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+  timezone VARCHAR(50) NOT NULL DEFAULT 'UTC',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_user_role (role),
   INDEX idx_user_status (status)

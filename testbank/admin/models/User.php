@@ -54,7 +54,7 @@ class User {
      */
     public function find($id) {
         try {
-            $stmt = $this->db->prepare("SELECT id, name, email, password_hash, role, status FROM users WHERE id = :id LIMIT 1");
+            $stmt = $this->db->prepare("SELECT id, name, email, password_hash, role, status, email_notifications, timezone FROM users WHERE id = :id LIMIT 1");
             $stmt->execute(['id' => $id]);
             $user = $stmt->fetch();
             return $user ? $user : null;
@@ -174,5 +174,54 @@ class User {
      */
     public function delete($id) {
         return $this->setStatus($id, 'disabled');
+    }
+
+    /**
+     * Self-service profile update — name and email ONLY. Deliberately
+     * separate from update() above, which also accepts role/status and
+     * is meant for admin use. A user editing their own profile must never
+     * be able to change their own role through this path.
+     */
+    public function updateProfile($id, $name, $email) {
+        try {
+            $stmt = $this->db->prepare("UPDATE users SET name = :name, email = :email WHERE id = :id");
+            return $stmt->execute(['id' => $id, 'name' => $name, 'email' => $email]);
+        } catch (PDOException $e) {
+            error_log("User::updateProfile error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Self-service password change — password ONLY. The controller must
+     * verify the person's current password before calling this; this
+     * method itself does not re-check anything, it just writes the hash.
+     */
+    public function updatePassword($id, $newPassword) {
+        try {
+            $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $this->db->prepare("UPDATE users SET password_hash = :hash WHERE id = :id");
+            return $stmt->execute(['id' => $id, 'hash' => $hash]);
+        } catch (PDOException $e) {
+            error_log("User::updatePassword error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Self-service notification/timezone preferences.
+     */
+    public function updatePreferences($id, $emailNotifications, $timezone) {
+        try {
+            $stmt = $this->db->prepare("UPDATE users SET email_notifications = :en, timezone = :tz WHERE id = :id");
+            return $stmt->execute([
+                'id' => $id,
+                'en' => $emailNotifications ? 1 : 0,
+                'tz' => $timezone,
+            ]);
+        } catch (PDOException $e) {
+            error_log("User::updatePreferences error: " . $e->getMessage());
+            return false;
+        }
     }
 }

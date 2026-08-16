@@ -547,6 +547,18 @@ $activeRoute = $_GET['route'] ?? '';
                                 <span>Account Settings</span>
                             </a>
                         </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small" href="index.php?route=account/preferences">
+                                <i data-lucide="sliders-horizontal" size="16"></i>
+                                <span>Preferences</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small" href="index.php?route=account/billing">
+                                <i data-lucide="receipt" size="16"></i>
+                                <span>Billing &amp; Orders</span>
+                            </a>
+                        </li>
                         <li><hr class="dropdown-divider my-1"></li>
                         <li>
                             <a class="dropdown-item d-flex align-items-center gap-2 rounded py-2 px-3 small text-danger" href="index.php?route=logout">

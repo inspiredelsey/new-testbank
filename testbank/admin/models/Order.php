@@ -127,4 +127,23 @@ class Order {
         $stmt->execute($params);
         return $stmt->fetch() ?: null;
     }
+
+    /**
+     * A student's own order/purchase history — every checkout attempt
+     * (completed, pending, or failed) matched by their email. Matched by
+     * email rather than user_id for the same reason as elsewhere in this
+     * model: a brand-new signup's pending_checkouts row never gets a
+     * user_id backfilled onto it, only email is guaranteed populated.
+     */
+    public function forStudent($email) {
+        $stmt = $this->db->prepare("
+            SELECT pc.*, c.title AS course_title
+            FROM pending_checkouts pc
+            JOIN courses c ON pc.course_id = c.id
+            WHERE pc.email = ?
+            ORDER BY pc.created_at DESC
+        ");
+        $stmt->execute([$email]);
+        return $stmt->fetchAll();
+    }
 }

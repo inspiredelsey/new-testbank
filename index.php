@@ -61,6 +61,20 @@ switch ($route) {
         $controller->handleRequest($route);
         break;
 
+    case 'account/profile':
+    case 'account/settings':
+    case 'account/preferences':
+        require_once __DIR__ . '/testbank/admin/controllers/AccountController.php';
+        $controller = new AccountController();
+        $controller->handleRequest(str_replace('account/', '', $route));
+        break;
+
+    case 'account/billing':
+        require_once __DIR__ . '/testbank/site/controllers/BillingController.php';
+        $controller = new BillingController();
+        $controller->handleRequest('index');
+        break;
+
     // ---------------- ADMIN / INSTRUCTOR ROUTES ----------------
     case 'admin/download_schema':
         Auth::requireRole(['admin', 'instructor']);
